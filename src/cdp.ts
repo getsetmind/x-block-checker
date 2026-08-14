@@ -3,6 +3,8 @@ interface Pending {
 	reject: (reason: unknown) => void;
 }
 
+type EventListener = (params: unknown, sessionId?: string) => void;
+
 interface CdpMessage {
 	id?: number;
 	result?: unknown;
@@ -14,36 +16,64 @@ interface CdpMessage {
 
 type JsonRecord = Record<string, unknown>;
 
+function connectionError(): Error {
+	return new Error("CDP WebSocketへの接続に失敗しました");
+}
+
+function protocolError(error: unknown): Error {
+	if (typeof error === "object" && error !== null && "message" in error) {
+		const message = (error as { message?: unknown }).message;
+		if (typeof message === "string") return new Error(message);
+	}
+	return new Error(JSON.stringify(error));
+}
+
+async function waitForOpen(socket: WebSocket): Promise<void> {
+	await new Promise<void>((resolve, reject) => {
+		const cleanup = (): void => {
+			socket.removeEventListener("open", onOpen);
+			socket.removeEventListener("error", onError);
+		};
+		const onOpen = (): void => {
+			cleanup();
+			resolve();
+		};
+		const onError = (): void => {
+			cleanup();
+			reject(connectionError());
+		};
+		socket.addEventListener("open", onOpen);
+		socket.addEventListener("error", onError);
+	});
+}
+
 export class CdpClient {
 	private nextId = 1;
 	private readonly pending = new Map<number, Pending>();
-	private readonly listeners = new Map<
-		string,
-		((params: unknown, sessionId?: string) => void)[]
-	>();
+	private readonly listeners = new Map<string, EventListener[]>();
 
 	private constructor(private readonly socket: WebSocket) {
 		socket.addEventListener("message", (event) =>
 			this.onMessage(String(event.data)),
 		);
-		socket.addEventListener("close", () => {
-			for (const pending of this.pending.values())
-				pending.reject(new Error("CDP接続が閉じられました"));
-			this.pending.clear();
-		});
+		socket.addEventListener("close", () => this.rejectPending());
 	}
 
 	static async connect(url: string): Promise<CdpClient> {
 		const socket = new WebSocket(url);
-		await new Promise<void>((resolve, reject) => {
-			socket.addEventListener("open", () => resolve(), { once: true });
-			socket.addEventListener(
-				"error",
-				() => reject(new Error("CDP WebSocketへの接続に失敗しました")),
-				{ once: true },
-			);
-		});
+		try {
+			await waitForOpen(socket);
+		} catch (error) {
+			socket.close();
+			throw error;
+		}
 		return new CdpClient(socket);
+	}
+
+	private rejectPending(): void {
+		const error = new Error("CDP接続が閉じられました");
+		for (const pending of this.pending.values()) pending.reject(error);
+		this.pending.clear();
 	}
 
 	private onMessage(raw: string): void {
@@ -52,8 +82,7 @@ export class CdpClient {
 			const pending = this.pending.get(message.id);
 			if (!pending) return;
 			this.pending.delete(message.id);
-			if (message.error)
-				pending.reject(new Error(JSON.stringify(message.error)));
+			if (message.error) pending.reject(protocolError(message.error));
 			else pending.resolve(message.result);
 			return;
 		}
@@ -68,14 +97,18 @@ export class CdpClient {
 		sessionId?: string,
 	): Promise<T> {
 		const id = this.nextId++;
-		const payload: JsonRecord = { id, method, params };
-		if (sessionId) payload.sessionId = sessionId;
+		const payload = { id, method, params, ...(sessionId ? { sessionId } : {}) };
 		return new Promise<T>((resolve, reject) => {
 			this.pending.set(id, {
 				resolve: (value) => resolve(value as T),
 				reject,
 			});
-			this.socket.send(JSON.stringify(payload));
+			try {
+				this.socket.send(JSON.stringify(payload));
+			} catch (error) {
+				this.pending.delete(id);
+				reject(error);
+			}
 		});
 	}
 

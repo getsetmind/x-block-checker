@@ -1,41 +1,26 @@
 #!/usr/bin/env node
 
-import type { FileHandle } from "node:fs/promises";
-import { mkdir, open } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { parseArgs } from "./args.js";
+import { type CliOptions, parseArgs } from "./args.js";
 import { authenticate, checkUsers } from "./browser.js";
 import { resolveConfig } from "./config.js";
 import { saveResults, withRunLock } from "./storage.js";
-import { type CheckResult, statusLabels } from "./types.js";
+import {
+	type CheckResult,
+	type ConfigFile,
+	type RuntimeConfig,
+	statusLabels,
+} from "./types.js";
 
-const configTemplate = {
+const CONFIG_TEMPLATE = {
 	users: [],
 	outputDir: "./data",
 	timeoutSeconds: 20,
 	headless: true,
-};
+} satisfies ConfigFile;
 
-async function initialize(path: string): Promise<void> {
-	const absolutePath = resolve(path);
-	let handle: FileHandle;
-	try {
-		handle = await open(absolutePath, "wx");
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code === "EEXIST")
-			throw new Error(`設定ファイルは既に存在します: ${absolutePath}`);
-		throw error;
-	}
-	try {
-		await handle.writeFile(`${JSON.stringify(configTemplate, null, 2)}\n`);
-	} finally {
-		await handle.close();
-	}
-	process.stdout.write(`設定ファイルを作成しました: ${absolutePath}\n`);
-}
-
-function printHelp(): void {
-	process.stdout.write(`X Block Checker
+const HELP_TEXT = `X Block Checker
 
 専用ブラウザプロファイルを使い、Xのブロック関係を確認・記録します。
 
@@ -65,10 +50,33 @@ function printHelp(): void {
   0  全件を判定
   1  設定・認証・ブラウザなどの実行エラー
   2  判定不能のユーザーが1件以上存在
-`);
+`;
+
+function hasErrorCode(error: unknown, code: string): boolean {
+	return (error as NodeJS.ErrnoException).code === code;
 }
 
-function printTable(results: CheckResult[]): void {
+async function initialize(path: string): Promise<void> {
+	const absolutePath = resolve(path);
+	try {
+		await writeFile(
+			absolutePath,
+			`${JSON.stringify(CONFIG_TEMPLATE, null, 2)}\n`,
+			{ encoding: "utf8", flag: "wx" },
+		);
+	} catch (error) {
+		if (hasErrorCode(error, "EEXIST"))
+			throw new Error(`設定ファイルは既に存在します: ${absolutePath}`);
+		throw error;
+	}
+	process.stdout.write(`設定ファイルを作成しました: ${absolutePath}\n`);
+}
+
+function printHelp(): void {
+	process.stdout.write(HELP_TEXT);
+}
+
+function printTable(results: readonly CheckResult[]): void {
 	console.table(
 		results.map((result) => ({
 			ユーザー: `@${result.username}`,
@@ -78,28 +86,16 @@ function printTable(results: CheckResult[]): void {
 	);
 }
 
-async function main(): Promise<void> {
-	const options = parseArgs(process.argv.slice(2));
-	if (options.command === "help") {
-		printHelp();
-		return;
-	}
-	if (options.command === "init") {
-		await initialize(options.configPath);
-		return;
-	}
-	const config = await resolveConfig(options);
-	if (options.command === "auth") {
-		await authenticate(config);
-		process.stdout.write(`Xの認証を保存しました: ${config.profileDir}\n`);
-		return;
-	}
+async function runCheck(
+	options: CliOptions,
+	config: RuntimeConfig,
+): Promise<CheckResult[]> {
 	if (config.users.length === 0)
 		throw new Error(
 			"確認するユーザーを設定、引数、または --input で指定してください",
 		);
-	await mkdir(config.outputDir, { recursive: true });
-	const results = await withRunLock(config.outputDir, async () => {
+
+	return withRunLock(config.outputDir, async () => {
 		const checked = await checkUsers(config, (index, total, result) => {
 			if (!options.json)
 				process.stderr.write(
@@ -109,18 +105,46 @@ async function main(): Promise<void> {
 		await saveResults(config.outputDir, checked);
 		return checked;
 	});
-	if (options.json)
-		process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
+}
+
+function printResults(
+	results: readonly CheckResult[],
+	json: boolean,
+	outputDir: string,
+): void {
+	if (json) process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
 	else {
 		printTable(results);
-		process.stderr.write(`出力: ${config.outputDir}\n`);
+		process.stderr.write(`出力: ${outputDir}\n`);
 	}
-	if (results.some((result) => result.status === "unknown"))
-		process.exitCode = 2;
+}
+
+async function main(): Promise<number> {
+	const options = parseArgs(process.argv.slice(2));
+	switch (options.command) {
+		case "help":
+			printHelp();
+			return 0;
+		case "init":
+			await initialize(options.configPath);
+			return 0;
+		case "auth": {
+			const config = await resolveConfig(options);
+			await authenticate(config);
+			process.stdout.write(`Xの認証を保存しました: ${config.profileDir}\n`);
+			return 0;
+		}
+		case "check": {
+			const config = await resolveConfig(options);
+			const results = await runCheck(options, config);
+			printResults(results, options.json, config.outputDir);
+			return results.some((result) => result.status === "unknown") ? 2 : 0;
+		}
+	}
 }
 
 try {
-	await main();
+	process.exitCode = await main();
 } catch (error) {
 	process.stderr.write(
 		`エラー: ${error instanceof Error ? error.message : String(error)}\n`,

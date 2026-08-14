@@ -22,10 +22,7 @@ function resolveFrom(base: string, path: string): string {
 	return isAbsolute(path) ? path : resolve(base, path);
 }
 
-function resolveTimeoutSeconds(
-	options: CliOptions,
-	file: ConfigFile,
-): number {
+function resolveTimeoutSeconds(options: CliOptions, file: ConfigFile): number {
 	const seconds =
 		options.timeoutSeconds ?? file.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
 	if (

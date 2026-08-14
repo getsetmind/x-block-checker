@@ -8,9 +8,9 @@ const LOCK_ATTEMPTS = 2;
 
 function emptyHistory(): History {
 	return {
-	version: 1,
-	updatedAt: new Date(0).toISOString(),
-	results: {},
+		version: 1,
+		updatedAt: new Date(0).toISOString(),
+		results: {},
 	};
 }
 
@@ -55,7 +55,10 @@ async function readHistory(path: string): Promise<History> {
 	}
 }
 
-function mergeHistory(history: History, current: readonly CheckResult[]): History {
+function mergeHistory(
+	history: History,
+	current: readonly CheckResult[],
+): History {
 	const results = { ...history.results };
 	for (const result of current) results[result.username.toLowerCase()] = result;
 	return {
@@ -89,10 +92,7 @@ export async function saveResults(
 	await mkdir(outputDir, { recursive: true });
 	const historyPath = join(outputDir, "history.json");
 	const history = mergeHistory(await readHistory(historyPath), current);
-	await writeAtomic(
-		join(outputDir, "latest.json"),
-		serializeJson(current),
-	);
+	await writeAtomic(join(outputDir, "latest.json"), serializeJson(current));
 	await writeAtomic(historyPath, serializeJson(history));
 	await writeAtomic(
 		join(outputDir, "blocked.md"),

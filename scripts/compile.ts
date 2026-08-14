@@ -1,21 +1,28 @@
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
-await mkdir("dist", { recursive: true });
-const executableName =
-	process.platform === "win32" ? "x-block-checker.exe" : "x-block-checker";
-const outputPath = resolve("dist", executableName);
-const processResult = Bun.spawn(
+const OUTPUT_DIRECTORY = resolve("dist");
+const ENTRYPOINT = "src/cli.ts";
+
+function executableName(): string {
+	return process.platform === "win32"
+		? "x-block-checker.exe"
+		: "x-block-checker";
+}
+
+await mkdir(OUTPUT_DIRECTORY, { recursive: true });
+const outputPath = resolve(OUTPUT_DIRECTORY, executableName());
+const build = Bun.spawn(
 	[
 		process.execPath,
 		"build",
 		"--compile",
 		"--minify",
 		`--outfile=${outputPath}`,
-		"src/cli.ts",
+		ENTRYPOINT,
 	],
 	{ stdout: "inherit", stderr: "inherit" },
 );
-const exitCode = await processResult.exited;
+const exitCode = await build.exited;
 if (exitCode !== 0) process.exit(exitCode);
 process.stdout.write(`実行ファイル: ${outputPath}\n`);
