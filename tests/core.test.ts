@@ -32,6 +32,19 @@ describe("extractRelationships", () => {
 			}),
 		).toEqual([{ username: "Bar", blockedBy: false, blocking: true }]);
 	});
+
+	test("配列内にネストされた関係を抽出する", () => {
+		expect(
+			extractRelationships({
+				users: [
+					{
+						core: { screen_name: "Baz" },
+						relationshipPerspective: { blockedBy: true },
+					},
+				],
+			}),
+		).toEqual([{ username: "Baz", blockedBy: true }]);
+	});
 });
 
 describe("classify", () => {

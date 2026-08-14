@@ -5,6 +5,10 @@ import { appDataDir, findBrowserExecutable } from "./paths.js";
 import type { ConfigFile, RuntimeConfig } from "./types.js";
 import { parseUsernames } from "./usernames.js";
 
+const DEFAULT_TIMEOUT_SECONDS = 20;
+const MIN_TIMEOUT_SECONDS = 5;
+const MAX_TIMEOUT_SECONDS = 120;
+
 async function readOptionalJson(path: string): Promise<ConfigFile> {
 	try {
 		return JSON.parse(await readFile(path, "utf8")) as ConfigFile;
@@ -14,8 +18,35 @@ async function readOptionalJson(path: string): Promise<ConfigFile> {
 	}
 }
 
-function fromBase(base: string, path: string): string {
+function resolveFrom(base: string, path: string): string {
 	return isAbsolute(path) ? path : resolve(base, path);
+}
+
+function resolveTimeoutSeconds(
+	options: CliOptions,
+	file: ConfigFile,
+): number {
+	const seconds =
+		options.timeoutSeconds ?? file.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
+	if (
+		!Number.isFinite(seconds) ||
+		seconds < MIN_TIMEOUT_SECONDS ||
+		seconds > MAX_TIMEOUT_SECONDS
+	)
+		throw new Error("timeoutSeconds は5〜120で指定してください");
+	return seconds;
+}
+
+async function resolveUsernames(
+	options: CliOptions,
+	file: ConfigFile,
+	base: string,
+): Promise<string[]> {
+	const values = [...(file.users ?? []), ...options.usernames];
+	const inputPath = options.inputPath ?? file.input;
+	if (inputPath)
+		values.push(await readFile(resolveFrom(base, inputPath), "utf8"));
+	return parseUsernames(values);
 }
 
 export async function resolveConfig(
@@ -24,24 +55,16 @@ export async function resolveConfig(
 	const configPath = resolve(options.configPath);
 	const base = dirname(configPath);
 	const file = await readOptionalJson(configPath);
-	const inputPath = options.inputPath ?? file.input;
-	const values = [...(file.users ?? []), ...options.usernames];
-	if (inputPath) values.push(await readFile(fromBase(base, inputPath), "utf8"));
-	const timeoutSeconds = options.timeoutSeconds ?? file.timeoutSeconds ?? 20;
-	if (
-		!Number.isFinite(timeoutSeconds) ||
-		timeoutSeconds < 5 ||
-		timeoutSeconds > 120
-	)
-		throw new Error("timeoutSeconds は5〜120で指定してください");
+	const timeoutSeconds = resolveTimeoutSeconds(options, file);
 	const dataRoot = appDataDir();
+	const outputDir = options.outputDir ?? file.outputDir ?? dataRoot;
+	const profileDir =
+		options.profileDir ?? file.profileDir ?? resolve(dataRoot, "profile");
+
 	return {
-		users: parseUsernames(values),
-		outputDir: fromBase(base, options.outputDir ?? file.outputDir ?? dataRoot),
-		profileDir: fromBase(
-			base,
-			options.profileDir ?? file.profileDir ?? resolve(dataRoot, "profile"),
-		),
+		users: await resolveUsernames(options, file, base),
+		outputDir: resolveFrom(base, outputDir),
+		profileDir: resolveFrom(base, profileDir),
 		browserExecutable: findBrowserExecutable(
 			options.browserExecutable ?? file.browserExecutable,
 		),

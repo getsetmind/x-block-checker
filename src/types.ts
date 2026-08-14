@@ -10,7 +10,7 @@ export const statuses = [
 
 export type Status = (typeof statuses)[number];
 
-export const statusLabels: Record<Status, string> = {
+export const statusLabels = {
 	blocked: "ブロック確認",
 	mutual: "相互ブロック",
 	blocking: "自分からのみブロック",
@@ -18,7 +18,7 @@ export const statusLabels: Record<Status, string> = {
 	notFound: "存在しない",
 	suspended: "凍結",
 	unknown: "判定不能",
-};
+} as const satisfies Record<Status, string>;
 
 export interface Relationship {
 	username: string;

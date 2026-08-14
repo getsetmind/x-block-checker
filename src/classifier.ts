@@ -2,34 +2,40 @@ import type { PageState, Relationship, Status } from "./types.js";
 
 export const MIN_CLEAR_WAIT_MS = 5_000;
 
+const BLOCKED_MESSAGE_PATTERN =
+	/ブロックされています|あなたをブロックしました|ブロックされているため|you(?:'|’)re blocked|blocked you|has blocked you/i;
+const SUSPENDED_MESSAGE_PATTERN =
+	/アカウントは凍結|account (?:is|has been) suspended/i;
+const NOT_FOUND_MESSAGE_PATTERN =
+	/アカウントは存在しません|this account doesn(?:'|’)t exist/i;
+const UNBLOCK_ACTION_PATTERN = /ブロックを解除|unblock/i;
+
+function classifyRelationship(
+	relationship: Relationship | undefined,
+): Status | null {
+	if (!relationship) return null;
+
+	const { blockedBy, blocking } = relationship;
+	if (blockedBy === true) return blocking === true ? "mutual" : "blocked";
+	if (blockedBy === false && blocking === true) return "blocking";
+	if (blockedBy === false && blocking === false) return "clear";
+	return null;
+}
+
 export function classify(
 	state: PageState,
 	relationship: Relationship | undefined,
 	elapsedMs: number,
 ): Status | null {
-	const hasBlockedMessage =
-		/ブロックされています|あなたをブロックしました|ブロックされているため/.test(
-			state.text,
-		) || /you(?:'|’)re blocked|blocked you|has blocked you/i.test(state.text);
-	if (hasBlockedMessage)
+	if (BLOCKED_MESSAGE_PATTERN.test(state.text))
 		return relationship?.blocking === true ? "mutual" : "blocked";
-	if (/アカウントは凍結|account (?:is|has been) suspended/i.test(state.text))
-		return "suspended";
-	if (
-		/アカウントは存在しません|this account doesn(?:'|’)t exist/i.test(
-			state.text,
-		)
-	)
-		return "notFound";
+	if (SUSPENDED_MESSAGE_PATTERN.test(state.text)) return "suspended";
+	if (NOT_FOUND_MESSAGE_PATTERN.test(state.text)) return "notFound";
 	if (elapsedMs < MIN_CLEAR_WAIT_MS) return null;
-	if (relationship?.blockedBy === true && relationship.blocking === true)
-		return "mutual";
-	if (relationship?.blockedBy === true) return "blocked";
-	if (relationship?.blockedBy === false && relationship.blocking === true)
-		return "blocking";
-	if (relationship?.blockedBy === false && relationship.blocking === false)
-		return "clear";
-	if (state.profileLoaded && !/ブロックを解除|unblock/i.test(state.text))
+
+	const relationshipStatus = classifyRelationship(relationship);
+	if (relationshipStatus) return relationshipStatus;
+	if (state.profileLoaded && !UNBLOCK_ACTION_PATTERN.test(state.text))
 		return "clear";
 	return null;
 }
