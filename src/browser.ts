@@ -5,7 +5,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { appDataDir } from "./paths";
 import type { CheckResult, RuntimeConfig } from "./types";
-import { XChecker } from "./x-checker";
+import { createXChecker } from "./x-checker";
 
 interface LaunchedBrowser {
 	browser: Browser;
@@ -139,10 +139,10 @@ export async function checkUsers(
 			throw new Error(
 				"Xへ未認証です。先に x-block-checker auth を実行してください",
 			);
-		const checker = new XChecker(page, config.relationshipMode);
+		const checkUser = createXChecker(page, config.relationshipMode);
 		const results: CheckResult[] = [];
 		for (const [index, username] of config.users.entries()) {
-			const result = await checker.check(username, config.timeoutMs);
+			const result = await checkUser(username, config.timeoutMs);
 			results.push(result);
 			onProgress?.(index + 1, config.users.length, result);
 		}
