@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { classify, MIN_CLEAR_WAIT_MS } from "../src/x/classifier";
+import {
+	classify,
+	classifyVisibility,
+	MIN_CLEAR_WAIT_MS,
+} from "../src/x/classifier";
 
 describe("classify", () => {
 	test("相互ブロックを判定する", () => {
@@ -44,7 +48,7 @@ describe("classify", () => {
 
 	test("GraphQLから鍵アカウントを判定する", () => {
 		expect(
-			classify(
+			classifyVisibility(
 				{ text: "", profileLoaded: false },
 				{
 					username: "private",
@@ -59,7 +63,7 @@ describe("classify", () => {
 
 	test("DOMから鍵アカウントを判定する", () => {
 		expect(
-			classify(
+			classifyVisibility(
 				{ text: "These posts are protected", profileLoaded: true },
 				undefined,
 				MIN_CLEAR_WAIT_MS,
@@ -67,18 +71,18 @@ describe("classify", () => {
 		).toBe("protected");
 	});
 
-	test("鍵アカウントでもブロック関係を優先する", () => {
+	test("ブロック関係と鍵アカウントを独立して判定する", () => {
+		const relationship = {
+			username: "private",
+			blockedBy: true,
+			blocking: false,
+			protected: true,
+		} as const;
+		expect(classify({ text: "", profileLoaded: false }, relationship, 0)).toBe(
+			"blocked",
+		);
 		expect(
-			classify(
-				{ text: "", profileLoaded: false },
-				{
-					username: "private",
-					blockedBy: true,
-					blocking: false,
-					protected: true,
-				},
-				0,
-			),
-		).toBe("blocked");
+			classifyVisibility({ text: "", profileLoaded: false }, relationship, 0),
+		).toBe("protected");
 	});
 });

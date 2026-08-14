@@ -5,7 +5,12 @@ import { resolve } from "node:path";
 import { type CliOptions, parseArgs } from "./config/args";
 import { resolveConfig } from "./config/resolve";
 import { saveResults, withRunLock } from "./storage";
-import { type CheckResult, type RuntimeConfig, statusLabels } from "./types";
+import {
+	type CheckResult,
+	type RuntimeConfig,
+	statusLabels,
+	visibilityLabels,
+} from "./types";
 import { authenticate, checkUsers } from "./x/browser";
 
 function hasErrorCode(error: unknown, code: string): boolean {
@@ -79,6 +84,7 @@ function printTable(results: readonly CheckResult[]): void {
 		results.map((result) => ({
 			ユーザー: `@${result.username}`,
 			結果: statusLabels[result.status],
+			公開範囲: visibilityLabels[result.visibility],
 			確認日時: new Date(result.checkedAt).toLocaleString("ja-JP"),
 		})),
 	);
@@ -97,7 +103,7 @@ async function runCheck(
 		const checked = await checkUsers(config, (index, total, result) => {
 			if (!options.json)
 				process.stderr.write(
-					`[${index}/${total}] @${result.username}: ${statusLabels[result.status]}\n`,
+					`[${index}/${total}] @${result.username}: ${statusLabels[result.status]} / ${visibilityLabels[result.visibility]}\n`,
 				);
 		});
 		await saveResults(config.outputDir, checked);

@@ -6,7 +6,7 @@ import type {
 	Relationship,
 	RelationshipMode,
 } from "../types";
-import { classify } from "./classifier";
+import { classify, classifyVisibility } from "./classifier";
 import {
 	captureGraphqlTemplate,
 	createReplayRequest,
@@ -104,10 +104,12 @@ async function readPageState(page: Page): Promise<PageState> {
 function createResult(
 	username: string,
 	status: CheckResult["status"],
+	visibility: CheckResult["visibility"],
 ): CheckResult {
 	return {
 		username,
 		status,
+		visibility,
 		checkedAt: new Date().toISOString(),
 		url: `https://x.com/${encodeURIComponent(username)}`,
 	};
@@ -135,14 +137,17 @@ async function checkPage(
 		await Promise.all([...state.responseTasks]);
 		if (/\/(?:i\/flow\/login|login)(?:[/?#]|$)/.test(state.page.url()))
 			throw new Error("Xの認証が切れています。authを再実行してください");
-		const status = classify(
-			await readPageState(state.page),
-			state.mode === "dom" ? undefined : state.relationships.get(key),
-			Date.now() - startedAt,
-		);
-		if (status) return createResult(username, status);
+		const elapsedMs = Date.now() - startedAt;
+		const pageState = await readPageState(state.page);
+		const relationship =
+			state.mode === "dom" ? undefined : state.relationships.get(key);
+		const status = classify(pageState, relationship, elapsedMs);
+		if (status) {
+			const visibility = classifyVisibility(pageState, relationship, elapsedMs);
+			return createResult(username, status, visibility ?? "unknown");
+		}
 	}
-	return createResult(username, "unknown");
+	return createResult(username, "unknown", "unknown");
 }
 
 async function checkUser(
@@ -161,8 +166,14 @@ async function checkUser(
 			relationship,
 			Number.POSITIVE_INFINITY,
 		);
-		if (status) return createResult(username, status);
-		if (state.mode === "direct") return createResult(username, "unknown");
+		const visibility = classifyVisibility(
+			{ text: "", profileLoaded: false },
+			relationship,
+			Number.POSITIVE_INFINITY,
+		);
+		if (status) return createResult(username, status, visibility ?? "unknown");
+		if (state.mode === "direct")
+			return createResult(username, "unknown", visibility ?? "unknown");
 	}
 	return checkPage(state, username, timeoutMs);
 }

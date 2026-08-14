@@ -73,7 +73,7 @@ x-block-checker check --json
 | `blocked.md` | `blocked` と `mutual` のMarkdown一覧 |
 | `run.lock` | 実行中だけ存在する重複起動防止ロック |
 
-判定状態は `blocked`、`mutual`、`blocking`、`protected`、`clear`、`notFound`、`suspended`、`unknown`。鍵アカウントにブロック関係がある場合は、`protected`よりブロック関係を優先する。`unknown` が1件以上ある場合は終了コード`2`、設定・認証・ブラウザのエラーは`1`、全件判定時は`0`を返す。
+判定状態は `blocked`、`mutual`、`blocking`、`clear`、`notFound`、`suspended`、`unknown`。これとは別に公開範囲を `public`、`protected`、`unknown` で出力するため、「未ブロックかつ鍵アカウント」のように両方の情報を保持できる。`unknown` が1件以上ある場合は終了コード`2`、設定・認証・ブラウザのエラーは`1`、全件判定時は`0`を返す。
 
 ## 定期実行
 

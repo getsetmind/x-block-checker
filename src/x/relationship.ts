@@ -24,6 +24,7 @@ function extractRelationship(record: JsonRecord): Relationship | undefined {
 		record.relationship_perspectives ?? record.relationshipPerspective,
 	);
 	const core = asRecord(record.core);
+	const privacy = asRecord(record.privacy);
 	const username = firstString(
 		legacy.screen_name,
 		core.screen_name,
@@ -36,6 +37,7 @@ function extractRelationship(record: JsonRecord): Relationship | undefined {
 	);
 	const blocking = firstBoolean(legacy.blocking, perspective.blocking);
 	const protectedAccount = firstBoolean(
+		privacy.protected,
 		legacy.protected,
 		record.protected,
 		record.is_protected,
@@ -72,8 +74,13 @@ export function extractRelationships(payload: unknown): Relationship[] {
 		if (!isRecord(value)) return;
 
 		const relationship = extractRelationship(value);
-		if (relationship)
-			relationships.set(relationship.username.toLowerCase(), relationship);
+		if (relationship) {
+			const key = relationship.username.toLowerCase();
+			relationships.set(key, {
+				...relationships.get(key),
+				...relationship,
+			});
+		}
 
 		for (const child of Object.values(value)) walk(child);
 	};

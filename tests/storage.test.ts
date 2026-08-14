@@ -13,6 +13,7 @@ describe("storage", () => {
 				{
 					username: "Foo",
 					status: "blocked",
+					visibility: "public",
 					checkedAt: "2026-08-15T00:00:00.000Z",
 					url: "https://x.com/Foo",
 				},
@@ -35,6 +36,7 @@ describe("storage", () => {
 				{
 					username: "__proto__",
 					status: "clear",
+					visibility: "protected",
 					checkedAt: "2026-08-15T00:00:00.000Z",
 					url: "https://x.com/__proto__",
 				},

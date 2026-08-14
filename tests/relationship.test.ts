@@ -30,6 +30,15 @@ describe("extractRelationships", () => {
 		).toEqual([{ username: "Private", protected: true }]);
 	});
 
+	test("privacy形式から公開範囲を抽出する", () => {
+		expect(
+			extractRelationships({
+				core: { screen_name: "Current" },
+				privacy: { protected: true },
+			}),
+		).toEqual([{ username: "Current", protected: true }]);
+	});
+
 	test("relationship_perspectives形式を抽出する", () => {
 		expect(
 			extractRelationships({
@@ -50,5 +59,32 @@ describe("extractRelationships", () => {
 				],
 			}),
 		).toEqual([{ username: "Baz", blockedBy: true }]);
+	});
+
+	test("別ノードの関係と公開範囲を統合する", () => {
+		expect(
+			extractRelationships({
+				users: [
+					{
+						core: { screen_name: "Combined" },
+						privacy: { protected: true },
+					},
+					{
+						username: "combined",
+						relationship_perspectives: {
+							blocked_by: false,
+							blocking: false,
+						},
+					},
+				],
+			}),
+		).toEqual([
+			{
+				username: "combined",
+				protected: true,
+				blockedBy: false,
+				blocking: false,
+			},
+		]);
 	});
 });
