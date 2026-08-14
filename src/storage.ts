@@ -56,7 +56,10 @@ function mergeHistory(
 	history: History,
 	current: readonly CheckResult[],
 ): History {
-	const results = { ...history.results };
+	const results: History["results"] = Object.assign(
+		Object.create(null) as History["results"],
+		history.results,
+	);
 	for (const result of current) results[result.username.toLowerCase()] = result;
 	return {
 		version: 1,

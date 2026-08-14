@@ -14,6 +14,7 @@ import type {
 	Relationship,
 	RelationshipMode,
 } from "./types";
+import { isUsername } from "./usernames";
 
 function delay(milliseconds: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -143,6 +144,7 @@ export class XChecker {
 	}
 
 	async check(username: string, timeoutMs: number): Promise<CheckResult> {
+		if (!isUsername(username)) throw new Error("不正なユーザー名です");
 		if (
 			(this.mode === "auto" || this.mode === "direct") &&
 			this.graphqlTemplate

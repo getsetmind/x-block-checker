@@ -28,6 +28,29 @@ describe("storage", () => {
 		}
 	});
 
+	test("特殊なユーザー名を安全に履歴キーとして保存する", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "xbc-storage-test-"));
+		try {
+			await saveResults(dir, [
+				{
+					username: "__proto__",
+					status: "clear",
+					checkedAt: "2026-08-15T00:00:00.000Z",
+					url: "https://x.com/__proto__",
+				},
+			]);
+			const history = JSON.parse(
+				await readFile(join(dir, "history.json"), "utf8"),
+			) as { results: Record<string, { username: string }> };
+			const saved = Reflect.get(history.results, "__proto__") as
+				| { username: string }
+				| undefined;
+			expect(saved?.username).toBe("__proto__");
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	test("終了済みPIDのロックを回収する", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "xbc-storage-test-"));
 		try {

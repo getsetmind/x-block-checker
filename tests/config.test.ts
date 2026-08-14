@@ -35,7 +35,7 @@ describe("resolveConfig", () => {
 				outputDir: join(dir, "results"),
 				profileDir: join(dir, "profile"),
 				browserExecutable: browserPath,
-				timeoutMs: 30_000,
+				timeoutMs: 30000,
 				headless: false,
 				relationshipMode: "auto",
 			});
