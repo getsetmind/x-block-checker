@@ -5,9 +5,29 @@ describe("extractRelationships", () => {
 	test("legacy形式を抽出する", () => {
 		expect(
 			extractRelationships({
-				legacy: { screen_name: "Foo", blocked_by: true, blocking: false },
+				legacy: {
+					screen_name: "Foo",
+					blocked_by: true,
+					blocking: false,
+					protected: true,
+				},
 			}),
-		).toEqual([{ username: "Foo", blockedBy: true, blocking: false }]);
+		).toEqual([
+			{
+				username: "Foo",
+				blockedBy: true,
+				blocking: false,
+				protected: true,
+			},
+		]);
+	});
+
+	test("ブロック関係がなくても鍵アカウントを抽出する", () => {
+		expect(
+			extractRelationships({
+				legacy: { screen_name: "Private", protected: true },
+			}),
+		).toEqual([{ username: "Private", protected: true }]);
 	});
 
 	test("relationship_perspectives形式を抽出する", () => {

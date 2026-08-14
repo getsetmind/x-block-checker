@@ -10,7 +10,9 @@ function classifyRelationship(
 	const { blockedBy, blocking } = relationship;
 	if (blockedBy === true) return blocking === true ? "mutual" : "blocked";
 	if (blockedBy === false && blocking === true) return "blocking";
-	if (blockedBy === false && blocking === false) return "clear";
+	if (blockedBy === false && blocking === false)
+		return relationship.protected === true ? "protected" : "clear";
+	if (relationship.protected === true) return "protected";
 	return null;
 }
 
@@ -37,6 +39,12 @@ export function classify(
 	const relationshipStatus = classifyRelationship(relationship);
 	if (relationshipStatus) return relationshipStatus;
 	if (elapsedMs < MIN_CLEAR_WAIT_MS) return null;
+	if (
+		/このアカウント(?:のポスト)?は非公開|ポストは非公開です|these posts are protected|this account is private/i.test(
+			state.text,
+		)
+	)
+		return "protected";
 	if (state.profileLoaded && !/ブロックを解除|unblock/i.test(state.text))
 		return "clear";
 	return null;

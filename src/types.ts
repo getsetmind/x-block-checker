@@ -2,6 +2,7 @@ export const statuses = [
 	"blocked",
 	"mutual",
 	"blocking",
+	"protected",
 	"clear",
 	"notFound",
 	"suspended",
@@ -18,6 +19,7 @@ export const statusLabels = {
 	blocked: "ブロック確認",
 	mutual: "相互ブロック",
 	blocking: "自分からのみブロック",
+	protected: "鍵アカウント",
 	clear: "未ブロック",
 	notFound: "存在しない",
 	suspended: "凍結",
@@ -28,6 +30,7 @@ export interface Relationship {
 	username: string;
 	blockedBy?: boolean;
 	blocking?: boolean;
+	protected?: boolean;
 }
 
 export interface PageState {

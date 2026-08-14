@@ -35,13 +35,25 @@ function extractRelationship(record: JsonRecord): Relationship | undefined {
 		perspective.blockedBy,
 	);
 	const blocking = firstBoolean(legacy.blocking, perspective.blocking);
+	const protectedAccount = firstBoolean(
+		legacy.protected,
+		record.protected,
+		record.is_protected,
+	);
 
-	if (!username || (blockedBy === undefined && blocking === undefined)) return;
+	if (
+		!username ||
+		(blockedBy === undefined &&
+			blocking === undefined &&
+			protectedAccount === undefined)
+	)
+		return;
 
 	return {
 		username,
 		...(blockedBy === undefined ? {} : { blockedBy }),
 		...(blocking === undefined ? {} : { blocking }),
+		...(protectedAccount === undefined ? {} : { protected: protectedAccount }),
 	};
 }
 

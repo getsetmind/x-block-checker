@@ -41,4 +41,44 @@ describe("classify", () => {
 			),
 		).toBe("notFound");
 	});
+
+	test("GraphQLから鍵アカウントを判定する", () => {
+		expect(
+			classify(
+				{ text: "", profileLoaded: false },
+				{
+					username: "private",
+					blockedBy: false,
+					blocking: false,
+					protected: true,
+				},
+				0,
+			),
+		).toBe("protected");
+	});
+
+	test("DOMから鍵アカウントを判定する", () => {
+		expect(
+			classify(
+				{ text: "These posts are protected", profileLoaded: true },
+				undefined,
+				MIN_CLEAR_WAIT_MS,
+			),
+		).toBe("protected");
+	});
+
+	test("鍵アカウントでもブロック関係を優先する", () => {
+		expect(
+			classify(
+				{ text: "", profileLoaded: false },
+				{
+					username: "private",
+					blockedBy: true,
+					blocking: false,
+					protected: true,
+				},
+				0,
+			),
+		).toBe("blocked");
+	});
 });
