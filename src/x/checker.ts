@@ -1,4 +1,11 @@
 import { type HTTPResponse, type Page, TimeoutError } from "puppeteer-core";
+import { isUsername } from "../config/usernames";
+import type {
+	CheckResult,
+	PageState,
+	Relationship,
+	RelationshipMode,
+} from "../types";
 import { classify } from "./classifier";
 import {
 	captureGraphqlTemplate,
@@ -8,13 +15,6 @@ import {
 	type ReplayRequest,
 } from "./graphql";
 import { extractRelationships } from "./relationship";
-import type {
-	CheckResult,
-	PageState,
-	Relationship,
-	RelationshipMode,
-} from "./types";
-import { isUsername } from "./usernames";
 
 interface CheckerState {
 	page: Page;

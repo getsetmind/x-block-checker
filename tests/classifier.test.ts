@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { classify, MIN_CLEAR_WAIT_MS } from "../src/classifier";
+import { classify, MIN_CLEAR_WAIT_MS } from "../src/x/classifier";
 
 describe("classify", () => {
 	test("相互ブロックを判定する", () => {

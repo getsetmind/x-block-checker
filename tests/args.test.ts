@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseArgs } from "../src/args";
+import { parseArgs } from "../src/config/args";
 
 describe("parseArgs", () => {
 	test("コマンドとオプションを解析する", () => {

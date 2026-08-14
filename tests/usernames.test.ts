@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseUsernames } from "../src/usernames";
+import { parseUsernames } from "../src/config/usernames";
 
 describe("parseUsernames", () => {
 	test("ユーザー名とURLを正規化し最初の表記で重複を除く", () => {

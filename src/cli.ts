@@ -2,11 +2,11 @@
 
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { type CliOptions, parseArgs } from "./args";
-import { authenticate, checkUsers } from "./browser";
-import { resolveConfig } from "./config";
+import { type CliOptions, parseArgs } from "./config/args";
+import { resolveConfig } from "./config/resolve";
 import { saveResults, withRunLock } from "./storage";
 import { type CheckResult, type RuntimeConfig, statusLabels } from "./types";
+import { authenticate, checkUsers } from "./x/browser";
 
 function hasErrorCode(error: unknown, code: string): boolean {
 	return (error as NodeJS.ErrnoException).code === code;

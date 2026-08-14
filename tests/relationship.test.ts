@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { extractRelationships } from "../src/relationship";
+import { extractRelationships } from "../src/x/relationship";
 
 describe("extractRelationships", () => {
 	test("legacy形式を抽出する", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createReplayRequest, isUserByScreenName } from "../src/graphql";
+import { createReplayRequest, isUserByScreenName } from "../src/x/graphql";
 
 describe("graphql", () => {
 	test("UserByScreenNameリクエストを識別する", () => {

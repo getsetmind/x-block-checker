@@ -18,18 +18,11 @@ dist/x-block-checker.exe --help
 
 # Architecture
 
-- `src/types.ts`: 判定状態と共通の型定義
-- `src/args.ts`: CLI引数のパースとコマンド判定
 - `src/cli.ts`: コマンド、終了コード、出力
-- `src/browser.ts`: 専用プロファイルの保護、通常ブラウザによる認証、Puppeteerのライフサイクル
-- `src/x-checker.ts`: プロフィール巡回、DOM判定、内部GraphQLの受動観測と直接取得
-- `src/graphql.ts`: 捕捉したGraphQLリクエストの安全な再構成
-- `src/classifier.ts`: DOMとブロック関係からの純粋な状態判定
-- `src/relationship.ts`: GraphQLレスポンスの構造ゆれを吸収
-- `src/usernames.ts`: ユーザー名・URLの正規化と重複除去
-- `src/config.ts`: 設定ファイルとCLIオプションの統合
-- `src/paths.ts`: OS別アプリデータ領域とブラウザ実行ファイルの探索
+- `src/types.ts`: 判定状態と共通の型定義
 - `src/storage.ts`: ロック、履歴、Markdownの原子的保存
+- `src/config/`: CLI引数、設定解決、ユーザー名の検証、OS別パス探索
+- `src/x/`: ブラウザ認証、プロフィール巡回、GraphQL捕捉、関係抽出、状態判定
 - `tests/`: ブラウザを使わない単体テスト
 
 # Conventions

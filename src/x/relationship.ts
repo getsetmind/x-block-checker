@@ -1,4 +1,4 @@
-import type { Relationship } from "./types";
+import type { Relationship } from "../types";
 
 type JsonRecord = Record<string, unknown>;
 
