@@ -1,0 +1,24 @@
+{
+	"name": "x-block-checker",
+	"version": "0.1.0",
+	"description": "Check and record X block relationships from a schedulable CLI",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"compile": "bun scripts/compile.ts",
+		"install-local": "bun run compile && bun scripts/install-local.ts",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check .",
+		"format": "biome check --write --unsafe .",
+		"test": "bun test",
+		"check": "bun run format && bun run typecheck && bun test && bun run build && bun run compile"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.5",
+		"@types/bun": "^1.3.14",
+		"@types/node": "^26.2.0",
+		"@yuu1111/biome-config": "1.0.4",
+		"typescript": "^5.9.3"
+	}
+}

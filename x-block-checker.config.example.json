@@ -1,0 +1,6 @@
+{
+	"users": [],
+	"outputDir": "./data",
+	"timeoutSeconds": 20,
+	"headless": true
+}
