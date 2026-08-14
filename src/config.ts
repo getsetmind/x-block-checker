@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
-import type { CliOptions } from "./args.js";
-import { appDataDir, findBrowserExecutable } from "./paths.js";
-import type { ConfigFile, RuntimeConfig } from "./types.js";
-import { type RelationshipMode, relationshipModes } from "./types.js";
-import { parseUsernames } from "./usernames.js";
+import type { CliOptions } from "./args";
+import { appDataDir, findBrowserExecutable } from "./paths";
+import type { ConfigFile, RuntimeConfig } from "./types";
+import { type RelationshipMode, relationshipModes } from "./types";
+import { parseUsernames } from "./usernames";
 
 async function readOptionalJson(path: string): Promise<ConfigFile> {
 	try {

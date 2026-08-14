@@ -1,4 +1,4 @@
-import { type RelationshipMode, relationshipModes } from "./types.js";
+import { type RelationshipMode, relationshipModes } from "./types";
 
 export type Command = "auth" | "check" | "init" | "help";
 

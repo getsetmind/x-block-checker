@@ -2,9 +2,9 @@ import { access, mkdir, readdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
-import { appDataDir } from "./paths.js";
-import type { CheckResult, RuntimeConfig } from "./types.js";
-import { XChecker } from "./x-checker.js";
+import { appDataDir } from "./paths";
+import type { CheckResult, RuntimeConfig } from "./types";
+import { XChecker } from "./x-checker";
 
 interface LaunchedBrowser {
 	browser: Browser;

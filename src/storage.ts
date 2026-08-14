@@ -1,7 +1,7 @@
 import type { FileHandle } from "node:fs/promises";
 import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { type CheckResult, type History, statusLabels } from "./types.js";
+import { type CheckResult, type History, statusLabels } from "./types";
 
 function emptyHistory(): History {
 	return {

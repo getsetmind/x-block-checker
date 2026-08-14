@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveConfig } from "../src/config.js";
+import { resolveConfig } from "../src/config";
 
 describe("resolveConfig", () => {
 	test("設定ファイルを基準にパスとユーザーを解決する", async () => {

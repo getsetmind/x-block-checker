@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appDataDir, findBrowserExecutable } from "../src/paths.js";
+import { appDataDir, findBrowserExecutable } from "../src/paths";
 
 describe("paths", () => {
 	test("アプリデータ保存先にアプリ名を付ける", () => {

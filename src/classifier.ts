@@ -1,4 +1,4 @@
-import type { PageState, Relationship, Status } from "./types.js";
+import type { PageState, Relationship, Status } from "./types";
 
 export const MIN_CLEAR_WAIT_MS = 5_000;
 

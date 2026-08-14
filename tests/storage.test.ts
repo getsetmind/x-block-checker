@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { saveResults, withRunLock } from "../src/storage.js";
+import { saveResults, withRunLock } from "../src/storage";
 
 describe("storage", () => {
 	test("履歴をマージして最新結果とMarkdownを保存する", async () => {

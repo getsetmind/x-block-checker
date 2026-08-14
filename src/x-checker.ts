@@ -1,19 +1,19 @@
 import { type HTTPResponse, type Page, TimeoutError } from "puppeteer-core";
-import { classify } from "./classifier.js";
+import { classify } from "./classifier";
 import {
 	captureGraphqlTemplate,
 	createReplayRequest,
 	type GraphqlTemplate,
 	isUserByScreenName,
 	type ReplayRequest,
-} from "./graphql.js";
-import { extractRelationships } from "./relationship.js";
+} from "./graphql";
+import { extractRelationships } from "./relationship";
 import type {
 	CheckResult,
 	PageState,
 	Relationship,
 	RelationshipMode,
-} from "./types.js";
+} from "./types";
 
 function delay(milliseconds: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds));
