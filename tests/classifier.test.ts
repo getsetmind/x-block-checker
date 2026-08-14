@@ -22,6 +22,16 @@ describe("classify", () => {
 		).toBeNull();
 	});
 
+	test("GraphQLの明示的な関係は描画待機前でも判定する", () => {
+		expect(
+			classify(
+				{ text: "", profileLoaded: false },
+				{ username: "foo", blockedBy: false, blocking: false },
+				0,
+			),
+		).toBe("clear");
+	});
+
 	test("存在しないアカウントを判定する", () => {
 		expect(
 			classify(

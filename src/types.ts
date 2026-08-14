@@ -10,6 +10,10 @@ export const statuses = [
 
 export type Status = (typeof statuses)[number];
 
+export const relationshipModes = ["auto", "dom", "passive", "direct"] as const;
+
+export type RelationshipMode = (typeof relationshipModes)[number];
+
 export const statusLabels = {
 	blocked: "ブロック確認",
 	mutual: "相互ブロック",
@@ -52,6 +56,7 @@ export interface ConfigFile {
 	browserExecutable?: string;
 	timeoutSeconds?: number;
 	headless?: boolean;
+	relationshipMode?: RelationshipMode;
 }
 
 export interface RuntimeConfig {
@@ -61,4 +66,5 @@ export interface RuntimeConfig {
 	browserExecutable: string;
 	timeoutMs: number;
 	headless: boolean;
+	relationshipMode: RelationshipMode;
 }

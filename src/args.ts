@@ -1,3 +1,5 @@
+import { type RelationshipMode, relationshipModes } from "./types.js";
+
 export type Command = "auth" | "check" | "init" | "help";
 
 export interface CliOptions {
@@ -10,6 +12,7 @@ export interface CliOptions {
 	browserExecutable?: string;
 	timeoutSeconds?: number;
 	headless?: boolean;
+	relationshipMode?: RelationshipMode;
 	json: boolean;
 }
 
@@ -33,6 +36,14 @@ function parseTimeout(value: string): number {
 	if (!Number.isFinite(seconds) || seconds < 5 || seconds > 120)
 		throw new Error("--timeout は5〜120秒で指定してください");
 	return seconds;
+}
+
+function parseRelationshipMode(value: string): RelationshipMode {
+	if (relationshipModes.includes(value as RelationshipMode))
+		return value as RelationshipMode;
+	throw new Error(
+		"--relationship-mode は auto、dom、passive、direct のいずれかで指定してください",
+	);
 }
 
 export function parseArgs(argv: readonly string[]): CliOptions {
@@ -78,6 +89,11 @@ export function parseArgs(argv: readonly string[]): CliOptions {
 				break;
 			case "--timeout":
 				options.timeoutSeconds = parseTimeout(
+					requireValue(argv, index++, argument),
+				);
+				break;
+			case "--relationship-mode":
+				options.relationshipMode = parseRelationshipMode(
 					requireValue(argv, index++, argument),
 				);
 				break;

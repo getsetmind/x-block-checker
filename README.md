@@ -1,12 +1,10 @@
 # X Block Checker
 
-Xで指定したユーザーとのブロック関係を確認し、履歴をJSONとMarkdownへ保存するCLIツール。専用のChromiumプロファイルへ一度ログインすれば、以後はヘッドレスで定期実行できる。
-
-公式X APIキーは不要。Cookieを設定ファイルや環境変数へコピーせず、CLIが起動するChromiumの専用プロファイル内に保持する。
+Xで指定したユーザーとのブロック関係を確認し、履歴をJSONとMarkdownへ保存するCLIツール。Puppeteer Coreから専用のChromiumプロファイルへ一度ログインすれば、以後はヘッドレスで定期実行できる。
 
 ## 必要環境
 
-- Bun 1.3以降（ソースからのビルド用）
+- Bun 1.3以降
 - Chrome、Brave、Edge、Chromiumのいずれか
 
 コンパイル済み実行ファイルの利用時はNode.js、Bun、npmを必要としない。
@@ -29,7 +27,8 @@ Copy-Item x-block-checker.config.example.json x-block-checker.config.json
   "users": ["user1", "user2"],
   "outputDir": "./data",
   "timeoutSeconds": 20,
-  "headless": true
+  "headless": true,
+  "relationshipMode": "auto"
 }
 ```
 
@@ -120,8 +119,20 @@ cronから実行する場合も、同じOSユーザーで事前に`x-block-check
 | `browserExecutable` | 自動検出 | Chromium系ブラウザの実行ファイル |
 | `timeoutSeconds` | `20` | 1件あたりの待機上限（5〜120秒） |
 | `headless` | `true` | `check`でブラウザを非表示にする |
+| `relationshipMode` | `auto` | `auto`、`dom`、`passive`、`direct`から選ぶ判定方式 |
 
 CLIオプションは設定ファイルより優先される。全オプションは`x-block-checker --help`で確認できる。
+
+### 判定方式
+
+| モード | 動作 |
+|---|---|
+| `auto` | 内部GraphQLの直接取得を優先し、取得不能時は通常のプロフィール表示とDOM判定へフォールバック |
+| `dom` | プロフィール画面のDOMだけで判定 |
+| `passive` | 通常のプロフィール表示で発生した内部GraphQLレスポンスとDOMを使用 |
+| `direct` | 最初の通常表示で内部GraphQLリクエストを捕捉し、以後は直接取得を優先。取得不能時は`unknown` |
+
+内部GraphQLのURL、query ID、feature flags、認証headerは設定や履歴へ保存しない。実行中にブラウザの通常通信から捕捉し、メモリ内だけで再利用する。401、403、ログイン画面、判定材料の欠落時は安全側へ倒す。
 
 ## 開発
 

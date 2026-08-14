@@ -37,6 +37,7 @@ describe("resolveConfig", () => {
 				browserExecutable: browserPath,
 				timeoutMs: 30_000,
 				headless: false,
+				relationshipMode: "auto",
 			});
 		} finally {
 			await rm(dir, { recursive: true, force: true });

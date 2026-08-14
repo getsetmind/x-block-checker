@@ -33,10 +33,10 @@ export function classify(
 		)
 	)
 		return "notFound";
-	if (elapsedMs < MIN_CLEAR_WAIT_MS) return null;
 
 	const relationshipStatus = classifyRelationship(relationship);
 	if (relationshipStatus) return relationshipStatus;
+	if (elapsedMs < MIN_CLEAR_WAIT_MS) return null;
 	if (state.profileLoaded && !/ブロックを解除|unblock/i.test(state.text))
 		return "clear";
 	return null;

@@ -3,6 +3,7 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import type { CliOptions } from "./args.js";
 import { appDataDir, findBrowserExecutable } from "./paths.js";
 import type { ConfigFile, RuntimeConfig } from "./types.js";
+import { type RelationshipMode, relationshipModes } from "./types.js";
 import { parseUsernames } from "./usernames.js";
 
 async function readOptionalJson(path: string): Promise<ConfigFile> {
@@ -23,6 +24,17 @@ function resolveTimeoutSeconds(options: CliOptions, file: ConfigFile): number {
 	if (!Number.isFinite(seconds) || seconds < 5 || seconds > 120)
 		throw new Error("timeoutSeconds は5〜120で指定してください");
 	return seconds;
+}
+
+function resolveRelationshipMode(
+	options: CliOptions,
+	file: ConfigFile,
+): RelationshipMode {
+	const mode = options.relationshipMode ?? file.relationshipMode ?? "auto";
+	if (relationshipModes.includes(mode)) return mode;
+	throw new Error(
+		"relationshipMode は auto、dom、passive、direct のいずれかで指定してください",
+	);
 }
 
 async function resolveUsernames(
@@ -58,5 +70,6 @@ export async function resolveConfig(
 		),
 		timeoutMs: timeoutSeconds * 1000,
 		headless: options.headless ?? file.headless ?? true,
+		relationshipMode: resolveRelationshipMode(options, file),
 	};
 }

@@ -2,17 +2,20 @@
 	"name": "x-block-checker",
 	"version": "0.1.0",
 	"description": "Check and record X block relationships from a schedulable CLI",
-	"type": "module",
 	"private": true,
+	"type": "module",
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",
+		"check": "bun run format && bun run typecheck && bun test && bun run build && bun run compile",
 		"compile": "bun scripts/compile.ts",
-		"install-local": "bun run compile && bun scripts/install-local.ts",
-		"typecheck": "tsc --noEmit",
-		"lint": "biome check .",
 		"format": "biome check --write --unsafe .",
+		"install-local": "bun run compile && bun scripts/install-local.ts",
+		"lint": "biome check .",
 		"test": "bun test",
-		"check": "bun run format && bun run typecheck && bun test && bun run build && bun run compile"
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"puppeteer-core": "25.7.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.8",

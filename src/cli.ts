@@ -23,6 +23,7 @@ async function initialize(path: string): Promise<void> {
 					outputDir: "./data",
 					timeoutSeconds: 20,
 					headless: true,
+					relationshipMode: "auto",
 				},
 				null,
 				2,
@@ -59,6 +60,8 @@ function printHelp(): void {
       --profile-dir <path> ブラウザプロファイル保存先
       --browser <path>    Chrome、Brave、Edge、Chromiumの実行ファイル
       --timeout <秒>      1件あたりの待機上限 (5〜120)
+      --relationship-mode <mode>
+                          判定方式 (auto、dom、passive、direct)
       --headed            checkでもブラウザを表示
       --headless          checkをヘッドレス実行
       --json              結果をJSONで標準出力

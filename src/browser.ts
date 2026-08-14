@@ -1,16 +1,21 @@
-import type { ChildProcess } from "node:child_process";
-import { spawn } from "node:child_process";
-import { mkdir, readFile, rm } from "node:fs/promises";
-import { join } from "node:path";
-import { CdpClient } from "./cdp.js";
-import { classify } from "./classifier.js";
-import { extractRelationships } from "./relationship.js";
-import type {
-	CheckResult,
-	PageState,
-	Relationship,
-	RuntimeConfig,
-} from "./types.js";
+import { access, mkdir, readdir, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { isAbsolute, join, relative, resolve } from "node:path";
+import puppeteer, { type Browser, type Page } from "puppeteer-core";
+import { appDataDir } from "./paths.js";
+import type { CheckResult, RuntimeConfig } from "./types.js";
+import { XChecker } from "./x-checker.js";
+
+interface LaunchedBrowser {
+	browser: Browser;
+	page: Page;
+}
+
+type ProgressCallback = (
+	index: number,
+	total: number,
+	result: CheckResult,
+) => void;
 
 function delay(milliseconds: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -20,291 +25,123 @@ function hasErrorCode(error: unknown, code: string): boolean {
 	return (error as NodeJS.ErrnoException).code === code;
 }
 
-interface LaunchedBrowser {
-	client: CdpClient;
-	childProcess: ChildProcess;
+function isWithinPath(path: string, parent: string): boolean {
+	const child = relative(resolve(parent), resolve(path));
+	return child === "" || (!child.startsWith("..") && !isAbsolute(child));
 }
 
-async function waitForDebuggerUrl(
-	activePortPath: string,
-	childProcess: ChildProcess,
-): Promise<string> {
-	const deadline = Date.now() + 15_000;
-	while (Date.now() < deadline) {
-		if (childProcess.exitCode !== null)
-			throw new Error(
-				`ブラウザが起動直後に終了しました (${childProcess.exitCode})`,
-			);
-		try {
-			const [port, path] = (await readFile(activePortPath, "utf8"))
-				.trim()
-				.split(/\r?\n/);
-			if (port && path) return `ws://127.0.0.1:${port}${path}`;
-		} catch (error) {
-			if (!hasErrorCode(error, "ENOENT")) throw error;
-		}
-		await delay(100);
+function regularBrowserProfileRoots(): string[] {
+	if (process.platform === "win32") {
+		const local = process.env.LOCALAPPDATA;
+		if (!local) return [];
+		return [
+			join(local, "Google", "Chrome", "User Data"),
+			join(local, "BraveSoftware", "Brave-Browser", "User Data"),
+			join(local, "Microsoft", "Edge", "User Data"),
+		];
 	}
-	throw new Error("ブラウザのCDP待受開始がタイムアウトしました");
-}
-
-function browserArguments(
-	config: RuntimeConfig,
-	headless: boolean,
-	initialUrl: string,
-): string[] {
+	if (process.platform === "darwin")
+		return [
+			join(homedir(), "Library", "Application Support", "Google", "Chrome"),
+			join(
+				homedir(),
+				"Library",
+				"Application Support",
+				"BraveSoftware",
+				"Brave-Browser",
+			),
+			join(homedir(), "Library", "Application Support", "Microsoft Edge"),
+		];
 	return [
-		`--user-data-dir=${config.profileDir}`,
-		"--remote-debugging-port=0",
-		"--no-first-run",
-		"--no-default-browser-check",
-		...(headless ? ["--headless=new"] : []),
-		initialUrl,
+		join(homedir(), ".config", "google-chrome"),
+		join(homedir(), ".config", "chromium"),
+		join(homedir(), ".config", "BraveSoftware", "Brave-Browser"),
+		join(homedir(), ".config", "microsoft-edge"),
 	];
 }
 
-async function waitForProcessExit(
-	childProcess: ChildProcess,
-	timeoutMs: number,
-): Promise<void> {
-	if (childProcess.exitCode !== null) return;
-	await Promise.race([
-		new Promise<void>((resolve) => childProcess.once("exit", () => resolve())),
-		delay(timeoutMs),
-	]);
+async function ensureDedicatedProfile(profileDir: string): Promise<void> {
+	if (
+		regularBrowserProfileRoots().some((root) => isWithinPath(profileDir, root))
+	)
+		throw new Error(
+			"普段使いのブラウザプロファイルは使用できません。x-block-checker専用の空ディレクトリを指定してください",
+		);
+
+	await mkdir(profileDir, { recursive: true });
+	const markerPath = join(profileDir, ".x-block-checker-profile");
+	try {
+		await access(markerPath);
+		return;
+	} catch (error) {
+		if (!hasErrorCode(error, "ENOENT")) throw error;
+	}
+
+	const isDefaultProfile =
+		resolve(profileDir) === resolve(appDataDir(), "profile");
+	if (!isDefaultProfile && (await readdir(profileDir)).length > 0)
+		throw new Error(
+			`専用profileのmarkerがありません: ${profileDir}。空ディレクトリを指定してください`,
+		);
+	try {
+		await writeFile(markerPath, '{"version":1}\n', { flag: "wx" });
+	} catch (error) {
+		if (!hasErrorCode(error, "EEXIST")) throw error;
+	}
 }
 
 async function launchBrowser(
 	config: RuntimeConfig,
 	headless: boolean,
-	initialUrl: string,
 ): Promise<LaunchedBrowser> {
-	await mkdir(config.profileDir, { recursive: true });
-	const activePortPath = join(config.profileDir, "DevToolsActivePort");
-	await rm(activePortPath, { force: true });
-	const childProcess = spawn(
-		config.browserExecutable,
-		browserArguments(config, headless, initialUrl),
-		{
-			stdio: "ignore",
-			windowsHide: headless,
-		},
+	await ensureDedicatedProfile(config.profileDir);
+	const browser = await puppeteer.launch({
+		executablePath: config.browserExecutable,
+		userDataDir: config.profileDir,
+		headless,
+		args: ["--no-first-run", "--no-default-browser-check"],
+	});
+	const pages = await browser.pages();
+	return { browser, page: pages[0] ?? (await browser.newPage()) };
+}
+
+async function hasAuthCookie(browser: Browser): Promise<boolean> {
+	const cookies = await browser.defaultBrowserContext().cookies();
+	return cookies.some(
+		(cookie) => cookie.name === "auth_token" && cookie.value.length > 0,
 	);
-	try {
-		const client = await CdpClient.connect(
-			await waitForDebuggerUrl(activePortPath, childProcess),
-		);
-		return { client, childProcess };
-	} catch (error) {
-		childProcess.kill();
-		throw error;
-	}
-}
-
-async function closeBrowser(browser: LaunchedBrowser): Promise<void> {
-	try {
-		const exit = waitForProcessExit(browser.childProcess, 5_000);
-		await browser.client.send("Browser.close").catch(() => {});
-		await exit;
-		if (browser.childProcess.exitCode === null) browser.childProcess.kill();
-	} finally {
-		browser.client.close();
-	}
-}
-
-async function hasAuthCookie(client: CdpClient): Promise<boolean> {
-	const { cookies } = await client.send<{
-		cookies: { name: string; value: string }[];
-	}>("Storage.getCookies");
-	return cookies.some((cookie) => cookie.name === "auth_token" && cookie.value);
 }
 
 export async function authenticate(config: RuntimeConfig): Promise<void> {
-	const browser = await launchBrowser(config, false, "https://x.com/home");
+	const { browser, page } = await launchBrowser(config, false);
 	try {
-		if (await hasAuthCookie(browser.client)) return;
+		await page.goto("https://x.com/home", { waitUntil: "domcontentloaded" });
+		if (await hasAuthCookie(browser)) return;
 		process.stderr.write(
 			"ブラウザでXへログインしてください。認証完了を最大10分待機します\n",
 		);
 		const deadline = Date.now() + 10 * 60_000;
 		while (Date.now() < deadline) {
 			await delay(1_000);
-			if (await hasAuthCookie(browser.client)) return;
+			if (await hasAuthCookie(browser)) return;
 		}
 		throw new Error("ログイン待機がタイムアウトしました");
 	} finally {
-		await closeBrowser(browser);
+		await browser.close();
 	}
 }
-
-class BlockChecker {
-	private readonly relationships = new Map<string, Relationship>();
-	private readonly responseRequests = new Set<string>();
-	private readonly responseTasks = new Set<Promise<void>>();
-
-	constructor(
-		private readonly client: CdpClient,
-		private readonly sessionId: string,
-	) {
-		this.listenForRelationshipResponses();
-	}
-
-	private listenForRelationshipResponses(): void {
-		this.client.on<{ requestId: string; response?: { url?: string } }>(
-			"Network.responseReceived",
-			(params, sessionId) => {
-				if (sessionId !== this.sessionId) return;
-				const url = params.response?.url ?? "";
-				if (url.includes("/graphql/") && url.includes("UserByScreenName"))
-					this.responseRequests.add(params.requestId);
-			},
-		);
-		this.client.on<{ requestId: string }>(
-			"Network.loadingFinished",
-			(params, sessionId) => {
-				if (
-					sessionId !== this.sessionId ||
-					!this.responseRequests.delete(params.requestId)
-				)
-					return;
-				this.trackResponseTask(params.requestId);
-			},
-		);
-		this.client.on<{ requestId: string }>(
-			"Network.loadingFailed",
-			(params, sessionId) => {
-				if (sessionId === this.sessionId)
-					this.responseRequests.delete(params.requestId);
-			},
-		);
-	}
-
-	private trackResponseTask(requestId: string): void {
-		const task = this.readRelationshipResponse(requestId);
-		this.responseTasks.add(task);
-		void task.finally(() => this.responseTasks.delete(task));
-	}
-
-	private async readRelationshipResponse(requestId: string): Promise<void> {
-		try {
-			const response = await this.client.send<{
-				body: string;
-				base64Encoded?: boolean;
-			}>("Network.getResponseBody", { requestId }, this.sessionId);
-			const text = response.base64Encoded
-				? Buffer.from(response.body, "base64").toString("utf8")
-				: response.body;
-			for (const relationship of extractRelationships(JSON.parse(text)))
-				this.relationships.set(
-					relationship.username.toLowerCase(),
-					relationship,
-				);
-		} catch {
-			// 個別レスポンスを取得できなくてもDOM判定を続ける
-		}
-	}
-
-	private async readPageState(): Promise<PageState> {
-		const result = await this.client.send<{
-			result?: { value?: PageState };
-		}>(
-			"Runtime.evaluate",
-			{
-				expression: `(() => {
-					const primary = document.querySelector('[data-testid="primaryColumn"]');
-					const text = primary?.innerText || document.body?.innerText || '';
-					const profileLoaded = Boolean(
-						primary?.querySelector('[data-testid="UserName"]') ||
-						primary?.querySelector('[data-testid="UserDescription"]') ||
-						primary?.querySelector('[data-testid$="-follow"]')
-					);
-					return { text, profileLoaded };
-				})()`,
-				returnByValue: true,
-			},
-			this.sessionId,
-		);
-		return result.result?.value ?? { text: "", profileLoaded: false };
-	}
-
-	private async currentUrl(): Promise<string> {
-		const result = await this.client.send<{ result?: { value?: string } }>(
-			"Runtime.evaluate",
-			{ expression: "location.href", returnByValue: true },
-			this.sessionId,
-		);
-		return result.result?.value ?? "";
-	}
-
-	async check(username: string, timeoutMs: number): Promise<CheckResult> {
-		const key = username.toLowerCase();
-		const url = `https://x.com/${encodeURIComponent(username)}`;
-		this.relationships.delete(key);
-		await this.client.send("Page.navigate", { url }, this.sessionId);
-		const startedAt = Date.now();
-		let status: CheckResult["status"] = "unknown";
-		while (Date.now() - startedAt < timeoutMs) {
-			await delay(500);
-			await Promise.all([...this.responseTasks]);
-			const [currentUrl, pageState] = await Promise.all([
-				this.currentUrl(),
-				this.readPageState(),
-			]);
-			if (/\/(?:i\/flow\/login|login)(?:[/?#]|$)/.test(currentUrl))
-				throw new Error("Xの認証が切れています。authを再実行してください");
-			const classified = classify(
-				pageState,
-				this.relationships.get(key),
-				Date.now() - startedAt,
-			);
-			if (!classified) continue;
-			status = classified;
-			break;
-		}
-		return {
-			username,
-			status,
-			checkedAt: new Date().toISOString(),
-			url,
-		};
-	}
-}
-
-async function createCheckerSession(client: CdpClient): Promise<string> {
-	const { targetId } = await client.send<{ targetId: string }>(
-		"Target.createTarget",
-		{ url: "about:blank", background: true },
-	);
-	const { sessionId } = await client.send<{ sessionId: string }>(
-		"Target.attachToTarget",
-		{ targetId, flatten: true },
-	);
-	await Promise.all([
-		client.send("Network.enable", {}, sessionId),
-		client.send("Page.enable", {}, sessionId),
-		client.send("Runtime.enable", {}, sessionId),
-	]);
-	return sessionId;
-}
-
-type ProgressCallback = (
-	index: number,
-	total: number,
-	result: CheckResult,
-) => void;
 
 export async function checkUsers(
 	config: RuntimeConfig,
 	onProgress?: ProgressCallback,
 ): Promise<CheckResult[]> {
-	const browser = await launchBrowser(config, config.headless, "about:blank");
+	const { browser, page } = await launchBrowser(config, config.headless);
 	try {
-		if (!(await hasAuthCookie(browser.client)))
+		if (!(await hasAuthCookie(browser)))
 			throw new Error(
 				"Xへ未認証です。先に x-block-checker auth を実行してください",
 			);
-		const sessionId = await createCheckerSession(browser.client);
-		const checker = new BlockChecker(browser.client, sessionId);
+		const checker = new XChecker(page, config.relationshipMode);
 		const results: CheckResult[] = [];
 		for (const [index, username] of config.users.entries()) {
 			const result = await checker.check(username, config.timeoutMs);
@@ -313,6 +150,6 @@ export async function checkUsers(
 		}
 		return results;
 	} finally {
-		await closeBrowser(browser);
+		await browser.close();
 	}
 }
