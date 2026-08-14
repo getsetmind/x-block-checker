@@ -12,32 +12,8 @@ import type {
 	RuntimeConfig,
 } from "./types.js";
 
-const DEBUGGER_START_TIMEOUT_MS = 15_000;
-const BROWSER_CLOSE_TIMEOUT_MS = 5_000;
-const AUTH_TIMEOUT_MS = 10 * 60_000;
-const AUTH_POLL_INTERVAL_MS = 1_000;
-const CHECK_POLL_INTERVAL_MS = 500;
-const X_HOME_URL = "https://x.com/home";
-const LOGIN_URL_PATTERN = /\/(?:i\/flow\/login|login)(?:[/?#]|$)/;
-const USER_RELATIONSHIP_ENDPOINT = "UserByScreenName";
-
-const PAGE_STATE_EXPRESSION = `(() => {
-	const primary = document.querySelector('[data-testid="primaryColumn"]');
-	const text = primary?.innerText || document.body?.innerText || '';
-	const profileLoaded = Boolean(
-		primary?.querySelector('[data-testid="UserName"]') ||
-		primary?.querySelector('[data-testid="UserDescription"]') ||
-		primary?.querySelector('[data-testid$="-follow"]')
-	);
-	return { text, profileLoaded };
-})()`;
-
 function delay(milliseconds: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-function profileUrl(username: string): string {
-	return `https://x.com/${encodeURIComponent(username)}`;
 }
 
 function hasErrorCode(error: unknown, code: string): boolean {
@@ -53,7 +29,7 @@ async function waitForDebuggerUrl(
 	activePortPath: string,
 	childProcess: ChildProcess,
 ): Promise<string> {
-	const deadline = Date.now() + DEBUGGER_START_TIMEOUT_MS;
+	const deadline = Date.now() + 15_000;
 	while (Date.now() < deadline) {
 		if (childProcess.exitCode !== null)
 			throw new Error(
@@ -127,10 +103,7 @@ async function launchBrowser(
 
 async function closeBrowser(browser: LaunchedBrowser): Promise<void> {
 	try {
-		const exit = waitForProcessExit(
-			browser.childProcess,
-			BROWSER_CLOSE_TIMEOUT_MS,
-		);
+		const exit = waitForProcessExit(browser.childProcess, 5_000);
 		await browser.client.send("Browser.close").catch(() => {});
 		await exit;
 		if (browser.childProcess.exitCode === null) browser.childProcess.kill();
@@ -147,15 +120,15 @@ async function hasAuthCookie(client: CdpClient): Promise<boolean> {
 }
 
 export async function authenticate(config: RuntimeConfig): Promise<void> {
-	const browser = await launchBrowser(config, false, X_HOME_URL);
+	const browser = await launchBrowser(config, false, "https://x.com/home");
 	try {
 		if (await hasAuthCookie(browser.client)) return;
 		process.stderr.write(
 			"ブラウザでXへログインしてください。認証完了を最大10分待機します\n",
 		);
-		const deadline = Date.now() + AUTH_TIMEOUT_MS;
+		const deadline = Date.now() + 10 * 60_000;
 		while (Date.now() < deadline) {
-			await delay(AUTH_POLL_INTERVAL_MS);
+			await delay(1_000);
 			if (await hasAuthCookie(browser.client)) return;
 		}
 		throw new Error("ログイン待機がタイムアウトしました");
@@ -184,7 +157,7 @@ class BlockChecker {
 				const url = params.response?.url ?? "";
 				if (
 					url.includes("/graphql/") &&
-					url.includes(USER_RELATIONSHIP_ENDPOINT)
+					url.includes("UserByScreenName")
 				)
 					this.responseRequests.add(params.requestId);
 			},
@@ -239,7 +212,19 @@ class BlockChecker {
 			result?: { value?: PageState };
 		}>(
 			"Runtime.evaluate",
-			{ expression: PAGE_STATE_EXPRESSION, returnByValue: true },
+			{
+				expression: `(() => {
+					const primary = document.querySelector('[data-testid="primaryColumn"]');
+					const text = primary?.innerText || document.body?.innerText || '';
+					const profileLoaded = Boolean(
+						primary?.querySelector('[data-testid="UserName"]') ||
+						primary?.querySelector('[data-testid="UserDescription"]') ||
+						primary?.querySelector('[data-testid$="-follow"]')
+					);
+					return { text, profileLoaded };
+				})()`,
+				returnByValue: true,
+			},
 			this.sessionId,
 		);
 		return result.result?.value ?? { text: "", profileLoaded: false };
@@ -256,19 +241,19 @@ class BlockChecker {
 
 	async check(username: string, timeoutMs: number): Promise<CheckResult> {
 		const key = username.toLowerCase();
-		const url = profileUrl(username);
+		const url = `https://x.com/${encodeURIComponent(username)}`;
 		this.relationships.delete(key);
 		await this.client.send("Page.navigate", { url }, this.sessionId);
 		const startedAt = Date.now();
 		let status: CheckResult["status"] = "unknown";
 		while (Date.now() - startedAt < timeoutMs) {
-			await delay(CHECK_POLL_INTERVAL_MS);
+			await delay(500);
 			await Promise.all([...this.responseTasks]);
 			const [currentUrl, pageState] = await Promise.all([
 				this.currentUrl(),
 				this.readPageState(),
 			]);
-			if (LOGIN_URL_PATTERN.test(currentUrl))
+			if (/\/(?:i\/flow\/login|login)(?:[/?#]|$)/.test(currentUrl))
 				throw new Error("Xの認証が切れています。authを再実行してください");
 			const classified = classify(
 				pageState,

@@ -5,10 +5,6 @@ import { appDataDir, findBrowserExecutable } from "./paths.js";
 import type { ConfigFile, RuntimeConfig } from "./types.js";
 import { parseUsernames } from "./usernames.js";
 
-const DEFAULT_TIMEOUT_SECONDS = 20;
-const MIN_TIMEOUT_SECONDS = 5;
-const MAX_TIMEOUT_SECONDS = 120;
-
 async function readOptionalJson(path: string): Promise<ConfigFile> {
 	try {
 		return JSON.parse(await readFile(path, "utf8")) as ConfigFile;
@@ -23,12 +19,11 @@ function resolveFrom(base: string, path: string): string {
 }
 
 function resolveTimeoutSeconds(options: CliOptions, file: ConfigFile): number {
-	const seconds =
-		options.timeoutSeconds ?? file.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
+	const seconds = options.timeoutSeconds ?? file.timeoutSeconds ?? 20;
 	if (
 		!Number.isFinite(seconds) ||
-		seconds < MIN_TIMEOUT_SECONDS ||
-		seconds > MAX_TIMEOUT_SECONDS
+		seconds < 5 ||
+		seconds > 120
 	)
 		throw new Error("timeoutSeconds は5〜120で指定してください");
 	return seconds;

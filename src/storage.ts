@@ -3,9 +3,6 @@ import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type CheckResult, type History, statusLabels } from "./types.js";
 
-const HISTORY_VERSION = 1;
-const LOCK_ATTEMPTS = 2;
-
 function emptyHistory(): History {
 	return {
 		version: 1,
@@ -22,7 +19,7 @@ function isHistory(value: unknown): value is History {
 	if (typeof value !== "object" || value === null) return false;
 	const candidate = value as Partial<History>;
 	return (
-		candidate.version === HISTORY_VERSION &&
+		candidate.version === 1 &&
 		typeof candidate.updatedAt === "string" &&
 		typeof candidate.results === "object" &&
 		candidate.results !== null &&
@@ -62,7 +59,7 @@ function mergeHistory(
 	const results = { ...history.results };
 	for (const result of current) results[result.username.toLowerCase()] = result;
 	return {
-		version: HISTORY_VERSION,
+		version: 1,
 		updatedAt: new Date().toISOString(),
 		results,
 	};
@@ -128,7 +125,7 @@ async function createLock(lockPath: string): Promise<FileHandle> {
 }
 
 async function acquireLock(lockPath: string): Promise<FileHandle> {
-	for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt++) {
+	for (let attempt = 0; attempt < 2; attempt++) {
 		try {
 			return await createLock(lockPath);
 		} catch (error) {

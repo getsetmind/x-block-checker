@@ -8,19 +8,41 @@ import { resolveConfig } from "./config.js";
 import { saveResults, withRunLock } from "./storage.js";
 import {
 	type CheckResult,
-	type ConfigFile,
 	type RuntimeConfig,
 	statusLabels,
 } from "./types.js";
 
-const CONFIG_TEMPLATE = {
-	users: [],
-	outputDir: "./data",
-	timeoutSeconds: 20,
-	headless: true,
-} satisfies ConfigFile;
+function hasErrorCode(error: unknown, code: string): boolean {
+	return (error as NodeJS.ErrnoException).code === code;
+}
 
-const HELP_TEXT = `X Block Checker
+async function initialize(path: string): Promise<void> {
+	const absolutePath = resolve(path);
+	try {
+		await writeFile(
+			absolutePath,
+			`${JSON.stringify(
+				{
+					users: [],
+					outputDir: "./data",
+					timeoutSeconds: 20,
+					headless: true,
+				},
+				null,
+				2,
+			)}\n`,
+			{ encoding: "utf8", flag: "wx" },
+		);
+	} catch (error) {
+		if (hasErrorCode(error, "EEXIST"))
+			throw new Error(`設定ファイルは既に存在します: ${absolutePath}`);
+		throw error;
+	}
+	process.stdout.write(`設定ファイルを作成しました: ${absolutePath}\n`);
+}
+
+function printHelp(): void {
+	process.stdout.write(`X Block Checker
 
 専用ブラウザプロファイルを使い、Xのブロック関係を確認・記録します。
 
@@ -50,30 +72,7 @@ const HELP_TEXT = `X Block Checker
   0  全件を判定
   1  設定・認証・ブラウザなどの実行エラー
   2  判定不能のユーザーが1件以上存在
-`;
-
-function hasErrorCode(error: unknown, code: string): boolean {
-	return (error as NodeJS.ErrnoException).code === code;
-}
-
-async function initialize(path: string): Promise<void> {
-	const absolutePath = resolve(path);
-	try {
-		await writeFile(
-			absolutePath,
-			`${JSON.stringify(CONFIG_TEMPLATE, null, 2)}\n`,
-			{ encoding: "utf8", flag: "wx" },
-		);
-	} catch (error) {
-		if (hasErrorCode(error, "EEXIST"))
-			throw new Error(`設定ファイルは既に存在します: ${absolutePath}`);
-		throw error;
-	}
-	process.stdout.write(`設定ファイルを作成しました: ${absolutePath}\n`);
-}
-
-function printHelp(): void {
-	process.stdout.write(HELP_TEXT);
+`);
 }
 
 function printTable(results: readonly CheckResult[]): void {

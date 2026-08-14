@@ -2,24 +2,6 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const APP_DIRECTORY = "x-block-checker";
-const BROWSER_NOT_FOUND_MESSAGE =
-	"Chrome、Brave、Edge、Chromiumの実行ファイルが見つかりません。設定の browserExecutable で指定してください";
-
-const MACOS_BROWSER_CANDIDATES = [
-	"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-	"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-	"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-];
-
-const LINUX_BROWSER_CANDIDATES = [
-	"/usr/bin/google-chrome",
-	"/usr/bin/google-chrome-stable",
-	"/usr/bin/chromium",
-	"/usr/bin/chromium-browser",
-	"/usr/bin/brave-browser",
-];
-
 function compactPaths(...paths: Array<string | undefined>): string[] {
 	return paths.filter((path): path is string => path !== undefined);
 }
@@ -54,9 +36,19 @@ function browserCandidates(): readonly string[] {
 		case "win32":
 			return windowsBrowserCandidates();
 		case "darwin":
-			return MACOS_BROWSER_CANDIDATES;
+			return [
+				"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+				"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+				"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+			];
 		default:
-			return LINUX_BROWSER_CANDIDATES;
+			return [
+				"/usr/bin/google-chrome",
+				"/usr/bin/google-chrome-stable",
+				"/usr/bin/chromium",
+				"/usr/bin/chromium-browser",
+				"/usr/bin/brave-browser",
+			];
 	}
 }
 
@@ -74,7 +66,7 @@ export function appDataDir(): string {
 			dataRoot =
 				process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share");
 	}
-	return join(dataRoot, APP_DIRECTORY);
+	return join(dataRoot, "x-block-checker");
 }
 
 export function findBrowserExecutable(explicitPath?: string): string {
@@ -85,6 +77,9 @@ export function findBrowserExecutable(explicitPath?: string): string {
 	}
 
 	const found = browserCandidates().find(existsSync);
-	if (!found) throw new Error(BROWSER_NOT_FOUND_MESSAGE);
+	if (!found)
+		throw new Error(
+			"Chrome、Brave、Edge、Chromiumの実行ファイルが見つかりません。設定の browserExecutable で指定してください",
+		);
 	return found;
 }

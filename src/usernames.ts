@@ -1,15 +1,12 @@
-const USERNAME_PATTERN = /^[A-Za-z0-9_]{1,15}$/;
-const PROFILE_URL_PATTERN =
-	/^https?:\/\/(?:www\.)?(?:x|twitter)\.com\/@?([A-Za-z0-9_]{1,15})(?:[/?#].*)?$/i;
-const TOKEN_SEPARATOR_PATTERN = /[\s,]+/;
-
 function normalizeUsername(value: string): string | null {
 	const trimmed = value.trim();
 	if (!trimmed) return null;
 
-	const urlMatch = trimmed.match(PROFILE_URL_PATTERN);
+	const urlMatch = trimmed.match(
+		/^https?:\/\/(?:www\.)?(?:x|twitter)\.com\/@?([A-Za-z0-9_]{1,15})(?:[/?#].*)?$/i,
+	);
 	const candidate = urlMatch?.[1] ?? trimmed.replace(/^@/, "");
-	return USERNAME_PATTERN.test(candidate) ? candidate : null;
+	return /^[A-Za-z0-9_]{1,15}$/.test(candidate) ? candidate : null;
 }
 
 export function parseUsernames(values: readonly string[]): string[] {
@@ -17,7 +14,7 @@ export function parseUsernames(values: readonly string[]): string[] {
 	const seen = new Set<string>();
 
 	for (const value of values) {
-		for (const token of value.split(TOKEN_SEPARATOR_PATTERN)) {
+		for (const token of value.split(/[\s,]+/)) {
 			const username = normalizeUsername(token);
 			if (!username) continue;
 

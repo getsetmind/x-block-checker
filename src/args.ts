@@ -1,8 +1,5 @@
 export type Command = "auth" | "check" | "init" | "help";
 
-const COMMANDS = new Set<Command>(["auth", "check", "init", "help"]);
-const DEFAULT_CONFIG_PATH = "x-block-checker.config.json";
-
 export interface CliOptions {
 	command: Command;
 	configPath: string;
@@ -17,7 +14,7 @@ export interface CliOptions {
 }
 
 function isCommand(value: string | undefined): value is Command {
-	return value !== undefined && COMMANDS.has(value as Command);
+	return ["auth", "check", "init", "help"].includes(value ?? "");
 }
 
 function requireValue(
@@ -52,7 +49,7 @@ export function parseArgs(argv: readonly string[]): CliOptions {
 
 	const options: CliOptions = {
 		command,
-		configPath: DEFAULT_CONFIG_PATH,
+		configPath: "x-block-checker.config.json",
 		usernames: [],
 		json: false,
 	};

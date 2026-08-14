@@ -1,17 +1,11 @@
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
-const OUTPUT_DIRECTORY = resolve("dist");
-const ENTRYPOINT = "src/cli.ts";
-
-function executableName(): string {
-	return process.platform === "win32"
-		? "x-block-checker.exe"
-		: "x-block-checker";
-}
-
-await mkdir(OUTPUT_DIRECTORY, { recursive: true });
-const outputPath = resolve(OUTPUT_DIRECTORY, executableName());
+await mkdir("dist", { recursive: true });
+const outputPath = resolve(
+	"dist",
+	process.platform === "win32" ? "x-block-checker.exe" : "x-block-checker",
+);
 const build = Bun.spawn(
 	[
 		process.execPath,
@@ -19,7 +13,7 @@ const build = Bun.spawn(
 		"--compile",
 		"--minify",
 		`--outfile=${outputPath}`,
-		ENTRYPOINT,
+		"src/cli.ts",
 	],
 	{ stdout: "inherit", stderr: "inherit" },
 );
