@@ -1,6 +1,6 @@
 # X Block Checker
 
-Xで指定したユーザーとのブロック関係を確認し、履歴をJSONとMarkdownへ保存するCLIツール。Puppeteer Coreから専用のChromiumプロファイルへ一度ログインすれば、以後はヘッドレスで定期実行できる。
+Xで指定したユーザーとのブロック関係を確認し、履歴をJSONとMarkdownへ保存するCLIツール。通常起動したChromiumの専用プロファイルへ一度ログインすれば、以後はPuppeteer Coreから同じプロファイルを使って定期実行できる。
 
 ## 必要環境
 
@@ -38,7 +38,7 @@ Copy-Item x-block-checker.config.example.json x-block-checker.config.json
 x-block-checker auth
 ```
 
-ログインを検出するとブラウザは自動で閉じる。認証が切れた場合も同じコマンドを再実行する。
+`auth`はPuppeteerやリモートデバッグを使わず、専用プロファイルを指定して通常のブラウザを起動する。Xへのログインを完了したら、ブラウザを手動で閉じる。認証が切れた場合も同じコマンドを再実行する。
 
 ## 実行
 

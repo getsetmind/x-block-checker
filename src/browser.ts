@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { access, mkdir, readdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
@@ -16,10 +17,6 @@ type ProgressCallback = (
 	total: number,
 	result: CheckResult,
 ) => void;
-
-function delay(milliseconds: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
 
 function hasErrorCode(error: unknown, code: string): boolean {
 	return (error as NodeJS.ErrnoException).code === code;
@@ -113,22 +110,23 @@ async function hasAuthCookie(browser: Browser): Promise<boolean> {
 }
 
 export async function authenticate(config: RuntimeConfig): Promise<void> {
-	const { browser, page } = await launchBrowser(config, false);
-	try {
-		await page.goto("https://x.com/home", { waitUntil: "domcontentloaded" });
-		if (await hasAuthCookie(browser)) return;
-		process.stderr.write(
-			"ブラウザでXへログインしてください。認証完了を最大10分待機します\n",
+	await ensureDedicatedProfile(config.profileDir);
+	process.stderr.write(
+		"専用ブラウザでXへログインし、完了したらブラウザを閉じてください\n",
+	);
+	const browserProcess = spawn(
+		config.browserExecutable,
+		[`--user-data-dir=${config.profileDir}`, "https://x.com/login"],
+		{ stdio: "ignore" },
+	);
+	const exitCode = await new Promise<number | null>((resolve, reject) => {
+		browserProcess.once("error", reject);
+		browserProcess.once("exit", resolve);
+	});
+	if (exitCode !== 0)
+		throw new Error(
+			`認証用ブラウザが異常終了しました: ${exitCode ?? "signal"}`,
 		);
-		const deadline = Date.now() + 10 * 60_000;
-		while (Date.now() < deadline) {
-			await delay(1_000);
-			if (await hasAuthCookie(browser)) return;
-		}
-		throw new Error("ログイン待機がタイムアウトしました");
-	} finally {
-		await browser.close();
-	}
 }
 
 export async function checkUsers(
