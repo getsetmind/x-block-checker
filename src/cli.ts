@@ -6,11 +6,7 @@ import { type CliOptions, parseArgs } from "./args.js";
 import { authenticate, checkUsers } from "./browser.js";
 import { resolveConfig } from "./config.js";
 import { saveResults, withRunLock } from "./storage.js";
-import {
-	type CheckResult,
-	type RuntimeConfig,
-	statusLabels,
-} from "./types.js";
+import { type CheckResult, type RuntimeConfig, statusLabels } from "./types.js";
 
 function hasErrorCode(error: unknown, code: string): boolean {
 	return (error as NodeJS.ErrnoException).code === code;

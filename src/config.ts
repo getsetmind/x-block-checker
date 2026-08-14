@@ -20,11 +20,7 @@ function resolveFrom(base: string, path: string): string {
 
 function resolveTimeoutSeconds(options: CliOptions, file: ConfigFile): number {
 	const seconds = options.timeoutSeconds ?? file.timeoutSeconds ?? 20;
-	if (
-		!Number.isFinite(seconds) ||
-		seconds < 5 ||
-		seconds > 120
-	)
+	if (!Number.isFinite(seconds) || seconds < 5 || seconds > 120)
 		throw new Error("timeoutSeconds は5〜120で指定してください");
 	return seconds;
 }

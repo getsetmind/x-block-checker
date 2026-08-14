@@ -155,10 +155,7 @@ class BlockChecker {
 			(params, sessionId) => {
 				if (sessionId !== this.sessionId) return;
 				const url = params.response?.url ?? "";
-				if (
-					url.includes("/graphql/") &&
-					url.includes("UserByScreenName")
-				)
+				if (url.includes("/graphql/") && url.includes("UserByScreenName"))
 					this.responseRequests.add(params.requestId);
 			},
 		);
