@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appDataDir, findBrowserExecutable } from "../src/config/paths";
+import {
+	appDataDir,
+	browserExecutableCandidates,
+	findBrowserExecutable,
+} from "../src/config/paths";
 
 describe("paths", () => {
 	test("アプリデータ保存先にアプリ名を付ける", () => {
@@ -18,5 +22,15 @@ describe("paths", () => {
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
+	});
+
+	test("macOSのシステム領域とユーザー領域からChromium系ブラウザを探す", () => {
+		const candidates = browserExecutableCandidates("darwin", "/Users/example");
+		expect(candidates).toContain(
+			"/Applications/Chromium.app/Contents/MacOS/Chromium",
+		);
+		expect(candidates).toContain(
+			"/Users/example/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		);
 	});
 });

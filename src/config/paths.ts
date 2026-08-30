@@ -1,15 +1,15 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 
 function compactPaths(...paths: Array<string | undefined>): string[] {
 	return paths.filter((path): path is string => path !== undefined);
 }
 
-function windowsBrowserCandidates(): string[] {
-	const localAppData = process.env.LOCALAPPDATA;
-	const programFiles = process.env.ProgramFiles;
-	const programFilesX86 = process.env["ProgramFiles(x86)"];
+function windowsBrowserCandidates(environment: NodeJS.ProcessEnv): string[] {
+	const localAppData = environment.LOCALAPPDATA;
+	const programFiles = environment.ProgramFiles;
+	const programFilesX86 = environment["ProgramFiles(x86)"];
 
 	return compactPaths(
 		programFiles &&
@@ -31,16 +31,31 @@ function windowsBrowserCandidates(): string[] {
 	);
 }
 
-function browserCandidates(): readonly string[] {
-	switch (process.platform) {
+function macBrowserCandidates(home: string): string[] {
+	const applications = ["/Applications", posix.join(home, "Applications")];
+	const browsers = [
+		["Google Chrome.app", "Google Chrome"],
+		["Brave Browser.app", "Brave Browser"],
+		["Microsoft Edge.app", "Microsoft Edge"],
+		["Chromium.app", "Chromium"],
+	] as const;
+	return applications.flatMap((directory) =>
+		browsers.map(([bundle, executable]) =>
+			posix.join(directory, bundle, "Contents", "MacOS", executable),
+		),
+	);
+}
+
+export function browserExecutableCandidates(
+	platform: NodeJS.Platform = process.platform,
+	home: string = homedir(),
+	environment: NodeJS.ProcessEnv = process.env,
+): readonly string[] {
+	switch (platform) {
 		case "win32":
-			return windowsBrowserCandidates();
+			return windowsBrowserCandidates(environment);
 		case "darwin":
-			return [
-				"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-				"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-				"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-			];
+			return macBrowserCandidates(home);
 		default:
 			return [
 				"/usr/bin/google-chrome",
@@ -76,7 +91,7 @@ export function findBrowserExecutable(explicitPath?: string): string {
 		return explicitPath;
 	}
 
-	const found = browserCandidates().find(existsSync);
+	const found = browserExecutableCandidates().find(existsSync);
 	if (!found)
 		throw new Error(
 			"Chrome、Brave、Edge、Chromiumの実行ファイルが見つかりません。設定の browserExecutable で指定してください",

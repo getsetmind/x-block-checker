@@ -40,6 +40,7 @@ function regularBrowserProfileRoots(): string[] {
 	if (process.platform === "darwin")
 		return [
 			join(homedir(), "Library", "Application Support", "Google", "Chrome"),
+			join(homedir(), "Library", "Application Support", "Chromium"),
 			join(
 				homedir(),
 				"Library",
@@ -130,8 +131,12 @@ export async function diagnose(config: RuntimeConfig): Promise<DoctorResult> {
 
 export async function authenticate(config: RuntimeConfig): Promise<void> {
 	await ensureDedicatedProfile(config.profileDir);
+	const closeInstruction =
+		process.platform === "darwin"
+			? "ログイン完了後、Command+Qでブラウザを完全に終了してください"
+			: "ログイン完了後、ブラウザを閉じてください";
 	process.stderr.write(
-		"専用ブラウザでXへログインし、完了したらブラウザを閉じてください\n",
+		`専用ブラウザでXへログインしてください。${closeInstruction}\n`,
 	);
 	const browserProcess = spawn(
 		config.browserExecutable,
@@ -146,6 +151,16 @@ export async function authenticate(config: RuntimeConfig): Promise<void> {
 		throw new Error(
 			`認証用ブラウザが異常終了しました: ${exitCode ?? "signal"}`,
 		);
+
+	const { browser } = await launchBrowser(config, true);
+	try {
+		if (!(await hasAuthCookie(browser)))
+			throw new Error(
+				"Xへのログインを確認できませんでした。authを再実行してください",
+			);
+	} finally {
+		await browser.close();
+	}
 }
 
 export async function checkUsers(

@@ -149,9 +149,7 @@ async function main(): Promise<number> {
 		case "auth": {
 			const config = await resolveConfig(options);
 			await authenticate(config);
-			process.stdout.write(
-				`認証用ブラウザを終了しました: ${config.profileDir}\n`,
-			);
+			process.stdout.write(`Xの認証を保存しました: ${config.profileDir}\n`);
 			return 0;
 		}
 		case "doctor": {
