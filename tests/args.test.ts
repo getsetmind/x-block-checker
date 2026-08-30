@@ -2,6 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { parseArgs } from "../src/config/args";
 
 describe("parseArgs", () => {
+	test("doctorコマンドをJSON出力付きで解析する", () => {
+		expect(parseArgs(["doctor", "--json"])).toEqual({
+			command: "doctor",
+			configPath: "x-block-checker.config.json",
+			usernames: [],
+			json: true,
+		});
+	});
+
 	test("コマンドとオプションを解析する", () => {
 		expect(
 			parseArgs([

@@ -9,6 +9,8 @@ Xで指定したユーザーとのブロック関係を確認し、履歴をJSON
 
 コンパイル済み実行ファイルの利用時はNode.js、Bun、npmを必要としない。
 
+タグ付きReleaseにはmacOS Apple Silicon、Linux x64、Windows x64向けの単一実行ファイルと`SHA256SUMS`を添付する。導入側では成果物とチェックサムを同じReleaseから取得して照合する。
+
 ## セットアップ
 
 ```powershell
@@ -39,6 +41,12 @@ x-block-checker auth
 ```
 
 `auth`はPuppeteerやリモートデバッグを使わず、専用プロファイルを指定して通常のブラウザを起動する。Xへのログインを完了したら、ブラウザを手動で閉じる。認証が切れた場合も同じコマンドを再実行する。
+
+ブラウザの検出、専用プロファイル、認証Cookieを診断する場合は`doctor`を使う。外部プログラムから判定する場合は`--json`を付け、終了コード`0`を利用可能、`1`を未準備として扱う。
+
+```powershell
+x-block-checker doctor --json
+```
 
 ## 実行
 

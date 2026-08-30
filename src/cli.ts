@@ -7,11 +7,12 @@ import { resolveConfig } from "./config/resolve";
 import { saveResults, withRunLock } from "./storage";
 import {
 	type CheckResult,
+	type DoctorResult,
 	type RuntimeConfig,
 	statusLabels,
 	visibilityLabels,
 } from "./types";
-import { authenticate, checkUsers } from "./x/browser";
+import { authenticate, checkUsers, diagnose } from "./x/browser";
 
 function hasErrorCode(error: unknown, code: string): boolean {
 	return (error as NodeJS.ErrnoException).code === code;
@@ -51,11 +52,13 @@ function printHelp(): void {
 使い方:
   x-block-checker init [--config <path>]
   x-block-checker auth [--config <path>]
+  x-block-checker doctor [--config <path>] [--json]
   x-block-checker check [@user ...] [options]
 
 コマンド:
   init                    設定ファイルの雛形を作成
   auth                    専用プロファイルを開いてXへログイン
+  doctor                  ブラウザと認証状態を診断
   check                   設定または引数のユーザーを確認
 
 オプション:
@@ -77,6 +80,17 @@ function printHelp(): void {
   1  設定・認証・ブラウザなどの実行エラー
   2  判定不能のユーザーが1件以上存在
 `);
+}
+
+function printDoctorResult(result: DoctorResult, json: boolean): void {
+	if (json) {
+		process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+		return;
+	}
+	process.stdout.write(`${result.message}\n`);
+	process.stdout.write(`ブラウザ: ${result.browserExecutable}\n`);
+	process.stdout.write(`プロファイル: ${result.profileDir}\n`);
+	process.stdout.write(`設定済みユーザー: ${result.configuredUsers}\n`);
 }
 
 function printTable(results: readonly CheckResult[]): void {
@@ -139,6 +153,12 @@ async function main(): Promise<number> {
 				`認証用ブラウザを終了しました: ${config.profileDir}\n`,
 			);
 			return 0;
+		}
+		case "doctor": {
+			const config = await resolveConfig(options);
+			const result = await diagnose(config);
+			printDoctorResult(result, options.json);
+			return result.ready ? 0 : 1;
 		}
 		case "check": {
 			const config = await resolveConfig(options);

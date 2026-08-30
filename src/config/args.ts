@@ -1,6 +1,6 @@
 import { type RelationshipMode, relationshipModes } from "../types";
 
-export type Command = "auth" | "check" | "init" | "help";
+export type Command = "auth" | "check" | "doctor" | "init" | "help";
 
 export interface CliOptions {
 	command: Command;
@@ -17,7 +17,7 @@ export interface CliOptions {
 }
 
 function isCommand(value: string | undefined): value is Command {
-	return ["auth", "check", "init", "help"].includes(value ?? "");
+	return ["auth", "check", "doctor", "init", "help"].includes(value ?? "");
 }
 
 function requireValue(

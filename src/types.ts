@@ -80,3 +80,12 @@ export interface RuntimeConfig {
 	headless: boolean;
 	relationshipMode: RelationshipMode;
 }
+
+export interface DoctorResult {
+	ready: boolean;
+	authenticated: boolean;
+	configuredUsers: number;
+	browserExecutable: string;
+	profileDir: string;
+	message: string;
+}

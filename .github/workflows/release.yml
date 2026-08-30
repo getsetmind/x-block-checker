@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.asset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            executable: x-block-checker
+            asset: x-block-checker-darwin-arm64
+          - os: ubuntu-latest
+            executable: x-block-checker
+            asset: x-block-checker-linux-x64
+          - os: windows-latest
+            executable: x-block-checker.exe
+            asset: x-block-checker-windows-x64.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - shell: bash
+        run: test "$GITHUB_REF_NAME" = "v$(bun -p 'require(\"./package.json\").version')"
+      - run: bun run check
+      - shell: bash
+        run: |
+          mkdir release
+          mv "dist/${{ matrix.executable }}" "release/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: release/${{ matrix.asset }}
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - working-directory: release
+        run: sha256sum x-block-checker-* > SHA256SUMS
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" release/* --generate-notes --verify-tag

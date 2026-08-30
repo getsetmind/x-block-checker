@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { appDataDir } from "../config/paths";
-import type { CheckResult, RuntimeConfig } from "../types";
+import type { CheckResult, DoctorResult, RuntimeConfig } from "../types";
 import { createXChecker } from "./checker";
 
 interface LaunchedBrowser {
@@ -107,6 +107,25 @@ async function hasAuthCookie(browser: Browser): Promise<boolean> {
 	return cookies.some(
 		(cookie) => cookie.name === "auth_token" && cookie.value.length > 0,
 	);
+}
+
+export async function diagnose(config: RuntimeConfig): Promise<DoctorResult> {
+	const { browser } = await launchBrowser(config, true);
+	try {
+		const authenticated = await hasAuthCookie(browser);
+		return {
+			ready: authenticated,
+			authenticated,
+			configuredUsers: config.users.length,
+			browserExecutable: config.browserExecutable,
+			profileDir: config.profileDir,
+			message: authenticated
+				? "Xブロック確認を実行できます"
+				: "Xへ未認証です。先に x-block-checker auth を実行してください",
+		};
+	} finally {
+		await browser.close();
+	}
 }
 
 export async function authenticate(config: RuntimeConfig): Promise<void> {
