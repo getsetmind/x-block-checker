@@ -58,6 +58,7 @@ function trackResponse(state: CheckerState, response: HTTPResponse): void {
 async function directRelationship(
 	state: CheckerState,
 	username: string,
+	timeoutMs: number,
 ): Promise<Relationship | undefined> {
 	if (!state.graphqlTemplate) return;
 	let request: ReplayRequest | null;
@@ -69,15 +70,25 @@ async function directRelationship(
 	if (!request) return;
 
 	try {
-		const response = await state.page.evaluate(async (input) => {
-			const result = await fetch(input.url, {
-				method: input.method,
-				headers: input.headers,
-				body: input.body,
-				credentials: "include",
-			});
-			return { ok: result.ok, text: await result.text() };
-		}, request);
+		const response = await state.page.evaluate(
+			async (input) => {
+				const controller = new AbortController();
+				const timeout = setTimeout(() => controller.abort(), input.timeoutMs);
+				try {
+					const result = await fetch(input.url, {
+						method: input.method,
+						headers: input.headers,
+						body: input.body,
+						credentials: "include",
+						signal: controller.signal,
+					});
+					return { ok: result.ok, text: await result.text() };
+				} finally {
+					clearTimeout(timeout);
+				}
+			},
+			{ ...request, timeoutMs },
+		);
 		if (!response.ok) return;
 		return extractRelationships(JSON.parse(response.text)).find(
 			(relationship) =>
@@ -160,7 +171,7 @@ async function checkUser(
 		(state.mode === "auto" || state.mode === "direct") &&
 		state.graphqlTemplate
 	) {
-		const relationship = await directRelationship(state, username);
+		const relationship = await directRelationship(state, username, timeoutMs);
 		const status = classify(
 			{ text: "", profileLoaded: false },
 			relationship,

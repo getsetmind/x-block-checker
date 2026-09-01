@@ -6,12 +6,12 @@
 	"type": "module",
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",
-		"check": "bun run format && bun run typecheck && bun test && bun run build && bun run compile",
+		"check": "bun run format && bun run lint && bun run typecheck && bun test && bun run build && bun run compile",
 		"cli": "bun src/cli.ts",
 		"compile": "bun scripts/compile.ts",
 		"format": "biome check --write --unsafe .",
 		"install-local": "bun run compile && bun scripts/install-local.ts",
-		"lint": "biome check .",
+		"lint": "biome check --error-on-warnings .",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit"
 	},

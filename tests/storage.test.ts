@@ -41,13 +41,22 @@ describe("storage", () => {
 					url: "https://x.com/__proto__",
 				},
 			]);
-			const history = JSON.parse(
+			const history: unknown = JSON.parse(
 				await readFile(join(dir, "history.json"), "utf8"),
-			) as { results: Record<string, { username: string }> };
-			const saved = Reflect.get(history.results, "__proto__") as
-				| { username: string }
-				| undefined;
-			expect(saved?.username).toBe("__proto__");
+			);
+			if (
+				typeof history !== "object" ||
+				history === null ||
+				!("results" in history) ||
+				typeof history.results !== "object" ||
+				history.results === null
+			)
+				throw new Error("保存した履歴の形式が不正です");
+			const saved = Object.getOwnPropertyDescriptor(
+				history.results,
+				"__proto__",
+			)?.value;
+			expect(saved).toMatchObject({ username: "__proto__" });
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}

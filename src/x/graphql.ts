@@ -48,7 +48,7 @@ function replaceScreenName(value: unknown, username: string): boolean {
 	let replaced = false;
 	for (const [key, child] of Object.entries(value)) {
 		if (key.replaceAll("_", "").toLowerCase() === "screenname") {
-			(value as Record<string, unknown>)[key] = username;
+			Reflect.set(value, key, username);
 			replaced = true;
 		} else if (replaceScreenName(child, username)) replaced = true;
 	}

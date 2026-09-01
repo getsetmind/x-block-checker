@@ -43,4 +43,38 @@ describe("resolveConfig", () => {
 			await rm(dir, { recursive: true, force: true });
 		}
 	});
+
+	test("設定ファイルのJSON構造を検証する", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "xbc-config-test-"));
+		try {
+			const invalidConfigs: unknown[] = [
+				null,
+				[],
+				{ users: "foo" },
+				{ users: [123] },
+				{ input: 123 },
+				{ outputDir: false },
+				{ profileDir: null },
+				{ browserExecutable: [] },
+				{ timeoutSeconds: "20" },
+				{ headless: "true" },
+				{ relationshipMode: "unknown" },
+			];
+
+			for (const [index, config] of invalidConfigs.entries()) {
+				const configPath = join(dir, `config-${index}.json`);
+				await writeFile(configPath, JSON.stringify(config));
+				await expect(
+					resolveConfig({
+						command: "check",
+						configPath,
+						usernames: [],
+						json: false,
+					}),
+				).rejects.toThrow("設定ファイルを読み込めません");
+			}
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
 });

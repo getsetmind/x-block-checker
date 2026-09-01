@@ -6,9 +6,48 @@ import type { CliOptions } from "./args";
 import { appDataDir, findBrowserExecutable } from "./paths";
 import { parseUsernames } from "./usernames";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+	return (
+		Array.isArray(value) && value.every((item) => typeof item === "string")
+	);
+}
+
+function isRelationshipMode(value: unknown): value is RelationshipMode {
+	return relationshipModes.some((mode) => mode === value);
+}
+
+function isConfigFile(value: unknown): value is ConfigFile {
+	if (!isRecord(value)) return false;
+	if ("users" in value && !isStringArray(value.users)) return false;
+	if ("input" in value && typeof value.input !== "string") return false;
+	if ("outputDir" in value && typeof value.outputDir !== "string") return false;
+	if ("profileDir" in value && typeof value.profileDir !== "string")
+		return false;
+	if (
+		"browserExecutable" in value &&
+		typeof value.browserExecutable !== "string"
+	)
+		return false;
+	if ("timeoutSeconds" in value && typeof value.timeoutSeconds !== "number")
+		return false;
+	if ("headless" in value && typeof value.headless !== "boolean") return false;
+	if (
+		"relationshipMode" in value &&
+		!isRelationshipMode(value.relationshipMode)
+	)
+		return false;
+	return true;
+}
+
 async function readOptionalJson(path: string): Promise<ConfigFile> {
 	try {
-		return JSON.parse(await readFile(path, "utf8")) as ConfigFile;
+		const value: unknown = JSON.parse(await readFile(path, "utf8"));
+		if (!isConfigFile(value)) throw new Error("設定ファイルの形式が不正です");
+		return value;
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
 		throw new Error(`設定ファイルを読み込めません: ${path}`, { cause: error });
