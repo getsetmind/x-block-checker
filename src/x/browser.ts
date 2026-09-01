@@ -12,6 +12,13 @@ interface LaunchedBrowser {
 	page: Page;
 }
 
+export function ignoredDefaultBrowserArgs(
+	platform: NodeJS.Platform = process.platform,
+): string[] | undefined {
+	if (platform !== "darwin") return undefined;
+	return ["--use-mock-keychain"];
+}
+
 type ProgressCallback = (
 	index: number,
 	total: number,
@@ -93,10 +100,12 @@ async function launchBrowser(
 	headless: boolean,
 ): Promise<LaunchedBrowser> {
 	await ensureDedicatedProfile(config.profileDir);
+	const ignoreDefaultArgs = ignoredDefaultBrowserArgs();
 	const browser = await puppeteer.launch({
 		executablePath: config.browserExecutable,
 		userDataDir: config.profileDir,
 		headless,
+		...(ignoreDefaultArgs ? { ignoreDefaultArgs } : {}),
 		args: ["--no-first-run", "--no-default-browser-check"],
 	});
 	const pages = await browser.pages();

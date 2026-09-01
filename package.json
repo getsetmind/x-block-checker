@@ -16,13 +16,13 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"puppeteer-core": "25.7.0"
+		"puppeteer-core": "25.9.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.5.8",
-		"@types/bun": "^1.3.14",
-		"@types/node": "^26.2.0",
-		"@yuu1111/biome-config": "1.0.4",
+		"@biomejs/biome": "2.5.11",
+		"@types/bun": "^1.4.0",
+		"@types/node": "^26.4.0",
+		"@yuu1111/biome-config": "1.3.0",
 		"@yuu1111/tsconfig": "1.0.4",
 		"typescript": "^7.0.2"
 	}
