@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
+import { hasErrorCode } from "../errors";
 import type { ConfigFile, RuntimeConfig } from "../types";
 import { type RelationshipMode, relationshipModes } from "../types";
 import type { CliOptions } from "./args";
@@ -49,7 +50,7 @@ async function readOptionalJson(path: string): Promise<ConfigFile> {
 		if (!isConfigFile(value)) throw new Error("設定ファイルの形式が不正です");
 		return value;
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+		if (hasErrorCode(error, "ENOENT")) return {};
 		throw new Error(`設定ファイルを読み込めません: ${path}`, { cause: error });
 	}
 }

@@ -1,6 +1,7 @@
 import type { FileHandle } from "node:fs/promises";
 import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { hasErrorCode } from "./errors";
 import { type CheckResult, type History, statusLabels } from "./types";
 
 function emptyHistory(): History {
@@ -9,10 +10,6 @@ function emptyHistory(): History {
 		updatedAt: new Date(0).toISOString(),
 		results: {},
 	};
-}
-
-function hasErrorCode(error: unknown, code: string): boolean {
-	return (error as NodeJS.ErrnoException).code === code;
 }
 
 function isHistory(value: unknown): value is History {

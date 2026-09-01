@@ -4,6 +4,7 @@ import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { type CliOptions, parseArgs } from "./config/args";
 import { resolveConfig } from "./config/resolve";
+import { hasErrorCode } from "./errors";
 import { saveResults, withRunLock } from "./storage";
 import {
 	type CheckResult,
@@ -13,10 +14,6 @@ import {
 	visibilityLabels,
 } from "./types";
 import { authenticate, checkUsers, diagnose } from "./x/browser";
-
-function hasErrorCode(error: unknown, code: string): boolean {
-	return (error as NodeJS.ErrnoException).code === code;
-}
 
 async function initialize(path: string): Promise<void> {
 	const absolutePath = resolve(path);

@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { appDataDir } from "../config/paths";
+import { hasErrorCode } from "../errors";
 import type { CheckResult, DoctorResult, RuntimeConfig } from "../types";
 import { createXChecker } from "./checker";
 
@@ -24,10 +25,6 @@ type ProgressCallback = (
 	total: number,
 	result: CheckResult,
 ) => void;
-
-function hasErrorCode(error: unknown, code: string): boolean {
-	return (error as NodeJS.ErrnoException).code === code;
-}
 
 function isWithinPath(path: string, parent: string): boolean {
 	const child = relative(resolve(parent), resolve(path));
