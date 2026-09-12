@@ -124,6 +124,15 @@ async function createLock(lockPath: string): Promise<FileHandle> {
 	}
 }
 
+async function readLockContents(lockPath: string): Promise<string | undefined> {
+	try {
+		return await readFile(lockPath, "utf8");
+	} catch (error) {
+		if (hasErrorCode(error, "ENOENT")) return undefined;
+		throw error;
+	}
+}
+
 async function acquireLock(lockPath: string): Promise<FileHandle> {
 	for (let attempt = 0; attempt < 2; attempt++) {
 		try {
@@ -131,13 +140,8 @@ async function acquireLock(lockPath: string): Promise<FileHandle> {
 		} catch (error) {
 			if (!hasErrorCode(error, "EEXIST")) throw error;
 
-			let contents: string;
-			try {
-				contents = await readFile(lockPath, "utf8");
-			} catch (readError) {
-				if (hasErrorCode(readError, "ENOENT")) continue;
-				throw readError;
-			}
+			const contents = await readLockContents(lockPath);
+			if (contents === undefined) continue;
 
 			if (isProcessRunning(parseLockPid(contents)) || attempt > 0)
 				throw new Error(`別の実行が進行中です: ${lockPath}`);

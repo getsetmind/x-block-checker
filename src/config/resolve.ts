@@ -21,27 +21,38 @@ function isRelationshipMode(value: unknown): value is RelationshipMode {
 	return relationshipModes.some((mode) => mode === value);
 }
 
+function isString(value: unknown): value is string {
+	return typeof value === "string";
+}
+
+function isNumber(value: unknown): value is number {
+	return typeof value === "number";
+}
+
+function isBoolean(value: unknown): value is boolean {
+	return typeof value === "boolean";
+}
+
+function hasValidOptionalField(
+	value: Record<string, unknown>,
+	field: string,
+	isValid: (fieldValue: unknown) => boolean,
+): boolean {
+	return !(field in value) || isValid(value[field]);
+}
+
 function isConfigFile(value: unknown): value is ConfigFile {
 	if (!isRecord(value)) return false;
-	if ("users" in value && !isStringArray(value.users)) return false;
-	if ("input" in value && typeof value.input !== "string") return false;
-	if ("outputDir" in value && typeof value.outputDir !== "string") return false;
-	if ("profileDir" in value && typeof value.profileDir !== "string")
-		return false;
-	if (
-		"browserExecutable" in value &&
-		typeof value.browserExecutable !== "string"
-	)
-		return false;
-	if ("timeoutSeconds" in value && typeof value.timeoutSeconds !== "number")
-		return false;
-	if ("headless" in value && typeof value.headless !== "boolean") return false;
-	if (
-		"relationshipMode" in value &&
-		!isRelationshipMode(value.relationshipMode)
-	)
-		return false;
-	return true;
+	return (
+		hasValidOptionalField(value, "users", isStringArray) &&
+		hasValidOptionalField(value, "input", isString) &&
+		hasValidOptionalField(value, "outputDir", isString) &&
+		hasValidOptionalField(value, "profileDir", isString) &&
+		hasValidOptionalField(value, "browserExecutable", isString) &&
+		hasValidOptionalField(value, "timeoutSeconds", isNumber) &&
+		hasValidOptionalField(value, "headless", isBoolean) &&
+		hasValidOptionalField(value, "relationshipMode", isRelationshipMode)
+	);
 }
 
 async function readOptionalJson(path: string): Promise<ConfigFile> {

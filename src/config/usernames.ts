@@ -17,6 +17,27 @@ function normalizeUsername(value: string): string | null {
 	return isUsername(candidate) ? candidate : null;
 }
 
+function addUsername(
+	token: string,
+	seen: Set<string>,
+	usernames: string[],
+): void {
+	if (!token) return;
+	const username = normalizeUsername(token);
+	if (!username)
+		throw new Error(
+			"ユーザー名は英数字とアンダースコアの1〜15文字、またはXのプロフィールURLで指定してください",
+		);
+
+	const key = username.toLowerCase();
+	if (seen.has(key)) return;
+
+	seen.add(key);
+	usernames.push(username);
+	if (usernames.length > maxUsernames)
+		throw new Error(`ユーザー名は最大${maxUsernames}件まで指定できます`);
+}
+
 export function parseUsernames(values: readonly string[]): string[] {
 	const usernames: string[] = [];
 	const seen = new Set<string>();
@@ -27,20 +48,7 @@ export function parseUsernames(values: readonly string[]): string[] {
 		if (inputLength > maxInputLength)
 			throw new Error("ユーザー名入力が長すぎます");
 		for (const token of value.split(/[\s,]+/)) {
-			if (!token) continue;
-			const username = normalizeUsername(token);
-			if (!username)
-				throw new Error(
-					"ユーザー名は英数字とアンダースコアの1〜15文字、またはXのプロフィールURLで指定してください",
-				);
-
-			const key = username.toLowerCase();
-			if (seen.has(key)) continue;
-
-			seen.add(key);
-			usernames.push(username);
-			if (usernames.length > maxUsernames)
-				throw new Error(`ユーザー名は最大${maxUsernames}件まで指定できます`);
+			addUsername(token, seen, usernames);
 		}
 	}
 

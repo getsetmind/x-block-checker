@@ -1,9 +1,16 @@
 {
-	"extends": ["./tsconfig.json", "@yuu1111/tsconfig/library.json"],
+	"extends": [
+		"./tsconfig.json",
+		"@yuu1111/tsconfig/library.json"
+	],
 	"compilerOptions": {
 		"outDir": "dist",
 		"rootDir": "src"
 	},
-	"include": ["src"],
-	"exclude": ["tests"]
+	"include": [
+		"src"
+	],
+	"exclude": [
+		"tests"
+	]
 }
