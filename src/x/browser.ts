@@ -13,6 +13,11 @@ interface LaunchedBrowser {
 	page: Page;
 }
 
+/**
+ * OSごとにPuppeteerの既定引数から外す引数を返す
+ *
+ * @param platform - 判定するOS
+ */
 export function ignoredDefaultBrowserArgs(
 	platform: NodeJS.Platform = process.platform,
 ): string[] | undefined {
@@ -116,6 +121,11 @@ async function hasAuthCookie(browser: Browser): Promise<boolean> {
 	);
 }
 
+/**
+ * ブラウザの起動と認証Cookieを確認して実行可否を診断する
+ *
+ * @param config - 解決済みの実行時設定
+ */
 export async function diagnose(config: RuntimeConfig): Promise<DoctorResult> {
 	const { browser } = await launchBrowser(config, true);
 	try {
@@ -135,6 +145,11 @@ export async function diagnose(config: RuntimeConfig): Promise<DoctorResult> {
 	}
 }
 
+/**
+ * 専用プロファイルの通常ブラウザを開き、ログイン結果を検証する
+ *
+ * @param config - 解決済みの実行時設定
+ */
 export async function authenticate(config: RuntimeConfig): Promise<void> {
 	await ensureDedicatedProfile(config.profileDir);
 	const closeInstruction =
@@ -169,6 +184,12 @@ export async function authenticate(config: RuntimeConfig): Promise<void> {
 	}
 }
 
+/**
+ * 設定済みの全ユーザーを順に確認して結果を返す
+ *
+ * @param config - 解決済みの実行時設定
+ * @param onProgress - 1件ごとの進捗通知
+ */
 export async function checkUsers(
 	config: RuntimeConfig,
 	onProgress?: ProgressCallback,

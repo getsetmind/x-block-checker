@@ -1,6 +1,7 @@
 # Project Overview
 
-x-block-checkerは、通常起動したChromiumで認証した専用プロファイルをPuppeteer Coreから使い、Xのブロック関係を定期確認するTypeScript CLI。公式X APIやCookieの手動書き出しは使わず、プロフィール画面とブラウザが使用する`UserByScreenName`レスポンスを判定する。
+x-block-checkerは、通常起動したChromiumで認証した専用プロファイルをPuppeteer Coreから使い、Xのブロック関係を定期確認するTypeScript CLI
+公式X APIやCookieの手動書き出しは使わず、プロフィール画面とブラウザが使用する`UserByScreenName`レスポンスを判定する
 
 # Commands
 
@@ -13,6 +14,7 @@ bun run build
 bun run compile
 bun run install-local
 bun run check
+bun run check:quality
 dist/x-block-checker.exe --help
 ```
 
@@ -27,7 +29,7 @@ dist/x-block-checker.exe --help
 
 # Conventions
 
-- コード内コメントは日本語で書き、文末に句点を付けない
+- 品質検査は`quality.json`の方針に従い`bun run check:quality`で実行する
 - 整形と自動修正は`bun run format`でまとめて行う
 - CookieやブラウザプロファイルをGit管理しない
 - 普段使いのChromiumプロファイルを受け入れず、専用markerの検証を維持する

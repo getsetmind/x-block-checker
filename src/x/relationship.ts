@@ -59,6 +59,11 @@ function extractRelationship(record: JsonRecord): Relationship | undefined {
 	};
 }
 
+/**
+ * GraphQLレスポンスを再帰的に走査して関係を抽出する
+ *
+ * @param payload - 解析するJSON値
+ */
 export function extractRelationships(payload: unknown): Relationship[] {
 	const relationships = new Map<string, Relationship>();
 	const seen = new Set<object>();

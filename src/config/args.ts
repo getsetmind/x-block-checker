@@ -1,7 +1,13 @@
 import { type RelationshipMode, relationshipModes } from "../types";
 
+/**
+ * CLIサブコマンド
+ */
 export type Command = "auth" | "check" | "doctor" | "init" | "help";
 
+/**
+ * 解析済みのCLI引数
+ */
 export interface CliOptions {
 	command: Command;
 	configPath: string;
@@ -46,6 +52,11 @@ function parseRelationshipMode(value: string): RelationshipMode {
 	);
 }
 
+/**
+ * コマンドライン引数を解析してオプションへ変換する
+ *
+ * @param argv - コマンド名より後ろの引数一覧
+ */
 export function parseArgs(argv: readonly string[]): CliOptions {
 	let command: Command = "check";
 	let index = 0;

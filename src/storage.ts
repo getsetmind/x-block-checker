@@ -82,6 +82,12 @@ function blockedMarkdown(results: readonly CheckResult[]): string {
 	].join("\n");
 }
 
+/**
+ * 判定結果をlatest.json、history.json、blocked.mdへ原子的に保存する
+ *
+ * @param outputDir - 保存先ディレクトリ
+ * @param current - 今回の判定結果
+ */
 export async function saveResults(
 	outputDir: string,
 	current: readonly CheckResult[],
@@ -151,6 +157,13 @@ async function acquireLock(lockPath: string): Promise<FileHandle> {
 	throw new Error(`実行ロックを取得できません: ${lockPath}`);
 }
 
+/**
+ * run.lockを取得してからactionを実行し、終了時に必ず解放する
+ *
+ * @typeParam T - actionが返す値の型
+ * @param outputDir - ロックファイルを置く出力先
+ * @param action - ロック保持中に実行する処理
+ */
 export async function withRunLock<T>(
 	outputDir: string,
 	action: () => Promise<T>,

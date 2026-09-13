@@ -100,6 +100,11 @@ async function resolveUsernames(
 	return parseUsernames(values);
 }
 
+/**
+ * CLI引数と設定ファイルを統合し、既定値を解決する
+ *
+ * @param options - 解析済みのCLI引数
+ */
 export async function resolveConfig(
 	options: CliOptions,
 ): Promise<RuntimeConfig> {

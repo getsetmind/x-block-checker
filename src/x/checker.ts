@@ -24,6 +24,9 @@ interface CheckerState {
 	graphqlTemplate?: GraphqlTemplate;
 }
 
+/**
+ * 1ユーザーを確認する関数の型
+ */
 export type CheckUser = (
 	username: string,
 	timeoutMs: number,
@@ -189,6 +192,12 @@ async function checkUser(
 	return checkPage(state, username, timeoutMs);
 }
 
+/**
+ * ページへレスポンス捕捉を登録し、確認関数を生成する
+ *
+ * @param page - 操作するページ
+ * @param mode - 判定方式
+ */
 export function createXChecker(page: Page, mode: RelationshipMode): CheckUser {
 	const state: CheckerState = {
 		page,

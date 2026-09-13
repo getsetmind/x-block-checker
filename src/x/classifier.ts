@@ -1,5 +1,8 @@
 import type { PageState, Relationship, Status, Visibility } from "../types";
 
+/**
+ * 未ブロックと確定するまでに待つ最短時間
+ */
 export const MIN_CLEAR_WAIT_MS = 5000;
 
 function classifyRelationship(
@@ -14,6 +17,13 @@ function classifyRelationship(
 	return null;
 }
 
+/**
+ * 画面状態と抽出済みの関係から判定状態を決める
+ *
+ * @param state - プロフィール画面の状態
+ * @param relationship - 抽出済みの関係
+ * @param elapsedMs - 画面表示からの経過時間
+ */
 export function classify(
 	state: PageState,
 	relationship: Relationship | undefined,
@@ -42,6 +52,13 @@ export function classify(
 	return null;
 }
 
+/**
+ * 画面状態と抽出済みの関係から公開範囲を決める
+ *
+ * @param state - プロフィール画面の状態
+ * @param relationship - 抽出済みの関係
+ * @param elapsedMs - 画面表示からの経過時間
+ */
 export function classifyVisibility(
 	state: PageState,
 	relationship: Relationship | undefined,

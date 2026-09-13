@@ -2,6 +2,11 @@ const maxInputLength = 65536;
 const maxUsernames = 1000;
 const usernamePattern = /^[A-Za-z0-9_]{1,15}$/;
 
+/**
+ * Xのユーザー名として有効な形式かを判定する
+ *
+ * @param value - 検証する文字列
+ */
 export function isUsername(value: string): boolean {
 	return usernamePattern.test(value);
 }
@@ -38,6 +43,11 @@ function addUsername(
 		throw new Error(`ユーザー名は最大${maxUsernames}件まで指定できます`);
 }
 
+/**
+ * 改行、空白、カンマ区切りの入力を重複のないユーザー名一覧へ変換する
+ *
+ * @param values - 区切りを含む入力の一覧
+ */
 export function parseUsernames(values: readonly string[]): string[] {
 	const usernames: string[] = [];
 	const seen = new Set<string>();

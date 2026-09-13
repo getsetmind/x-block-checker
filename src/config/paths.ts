@@ -46,6 +46,13 @@ function macBrowserCandidates(home: string): string[] {
 	);
 }
 
+/**
+ * OSごとにChromium系ブラウザの候補パスを返す
+ *
+ * @param platform - 判定するOS
+ * @param home - ホームディレクトリ
+ * @param environment - 参照する環境変数
+ */
 export function browserExecutableCandidates(
 	platform: NodeJS.Platform = process.platform,
 	home: string = homedir(),
@@ -67,6 +74,9 @@ export function browserExecutableCandidates(
 	}
 }
 
+/**
+ * OSごとのユーザーデータ領域にあるアプリ専用ディレクトリを返す
+ */
 export function appDataDir(): string {
 	let dataRoot: string;
 	switch (process.platform) {
@@ -84,6 +94,11 @@ export function appDataDir(): string {
 	return join(dataRoot, "x-block-checker");
 }
 
+/**
+ * 指定または自動検出したブラウザの実行ファイルを返す
+ *
+ * @param explicitPath - 明示された実行ファイル
+ */
 export function findBrowserExecutable(explicitPath?: string): string {
 	if (explicitPath) {
 		if (!existsSync(explicitPath))

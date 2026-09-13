@@ -1,5 +1,8 @@
 import type { HTTPRequest } from "puppeteer-core";
 
+/**
+ * 通常通信から捕捉したGraphQLリクエストの雛形
+ */
 export interface GraphqlTemplate {
 	url: string;
 	method: string;
@@ -7,6 +10,9 @@ export interface GraphqlTemplate {
 	postData?: string;
 }
 
+/**
+ * 捕捉した雛形へ対象ユーザーを差し替えた再送用リクエスト
+ */
 export interface ReplayRequest {
 	url: string;
 	method: string;
@@ -14,10 +20,20 @@ export interface ReplayRequest {
 	body?: string;
 }
 
+/**
+ * URLがユーザー情報を取得するGraphQLかを判定する
+ *
+ * @param url - 判定するURL
+ */
 export function isUserByScreenName(url: string): boolean {
 	return url.includes("/graphql/") && url.includes("UserByScreenName");
 }
 
+/**
+ * 捕捉したリクエストから再送に必要な雛形を取り出す
+ *
+ * @param request - 捕捉したリクエスト
+ */
 export function captureGraphqlTemplate(
 	request: HTTPRequest,
 ): GraphqlTemplate | null {
@@ -55,6 +71,12 @@ function replaceScreenName(value: unknown, username: string): boolean {
 	return replaced;
 }
 
+/**
+ * 雛形のscreen_nameを対象ユーザーへ差し替える
+ *
+ * @param template - 再送に使う雛形
+ * @param username - 差し替える対象ユーザー
+ */
 export function createReplayRequest(
 	template: GraphqlTemplate,
 	username: string,
