@@ -2,6 +2,44 @@ import { describe, expect, test } from "bun:test";
 import { parseArgs } from "../src/config/args";
 
 describe("parseArgs", () => {
+	test("blockingの長時間取得と再開制御を解析する", () => {
+		expect(
+			parseArgs([
+				"blocking",
+				"--wait",
+				"--restart",
+				"--page-limit",
+				"50",
+				"--json",
+			]),
+		).toMatchObject({
+			command: "blocking",
+			wait: true,
+			restart: true,
+			pageLimit: 50,
+			json: true,
+		});
+	});
+	test.each([
+		{ flag: "--wait" },
+		{ flag: "--restart" },
+		{ flag: "--page-limit" },
+	])("blocking以外への$flagを拒否する", ({ flag }) => {
+		expect(() =>
+			parseArgs(["check", flag, ...(flag === "--page-limit" ? ["2"] : [])]),
+		).toThrow("blocking専用");
+	});
+	test.each([
+		{ value: "0" },
+		{ value: "101" },
+		{ value: "1.5" },
+		{ value: "NaN" },
+	])("ページ数$valueを拒否する", ({ value }) => {
+		expect(() => parseArgs(["blocking", "--page-limit", value])).toThrow(
+			"1〜100の整数",
+		);
+	});
+
 	test("blockingをJSON出力付きで解析する", () => {
 		expect(parseArgs(["blocking", "--json"])).toEqual({
 			command: "blocking",
@@ -11,14 +49,15 @@ describe("parseArgs", () => {
 		});
 	});
 
-	test.each([["@Foo"], ["--input", "users.txt"], ["-i", "users.txt"]])(
-		"blockingへの対象指定 %j を拒否する",
-		(...arguments_) => {
-			expect(() => parseArgs(["blocking", ...arguments_])).toThrow(
-				"blocking はユーザー引数と --input を指定できません",
-			);
-		},
-	);
+	test.each([
+		{ arguments: ["@Foo"] },
+		{ arguments: ["--input", "users.txt"] },
+		{ arguments: ["-i", "users.txt"] },
+	])("blockingへの対象指定 %j を拒否する", ({ arguments: arguments_ }) => {
+		expect(() => parseArgs(["blocking", ...arguments_])).toThrow(
+			"blocking はユーザー引数と --input を指定できません",
+		);
+	});
 
 	test("doctorコマンドをJSON出力付きで解析する", () => {
 		expect(parseArgs(["doctor", "--json"])).toEqual({

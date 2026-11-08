@@ -26,6 +26,9 @@ export interface CliOptions {
 	headless?: boolean;
 	relationshipMode?: RelationshipMode;
 	json: boolean;
+	wait?: boolean;
+	restart?: boolean;
+	pageLimit?: number;
 }
 
 function isCommand(value: string | undefined): value is Command {
@@ -54,6 +57,14 @@ function parseTimeout(value: string): number {
 	return seconds;
 }
 
+function parsePageLimit(value: string): number {
+	const limit = Number(value);
+	if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+		throw new Error("--page-limit は1〜100の整数で指定してください");
+	}
+	return limit;
+}
+
 function parseRelationshipMode(value: string): RelationshipMode {
 	if (relationshipModes.includes(value as RelationshipMode)) {
 		return value as RelationshipMode;
@@ -61,6 +72,24 @@ function parseRelationshipMode(value: string): RelationshipMode {
 	throw new Error(
 		"--relationship-mode は auto、dom、passive、direct のいずれかで指定してください",
 	);
+}
+
+function validateBlockingOptions(options: CliOptions): void {
+	if (
+		options.command === "blocking" &&
+		(options.usernames.length > 0 || options.inputPath !== undefined)
+	) {
+		throw new Error("blocking はユーザー引数と --input を指定できません");
+	}
+	if (
+		options.command !== "blocking" &&
+		options.command !== "help" &&
+		(options.wait !== undefined ||
+			options.restart !== undefined ||
+			options.pageLimit !== undefined)
+	) {
+		throw new Error("--wait、--restart、--page-limit はblocking専用です");
+	}
 }
 
 /**
@@ -127,6 +156,17 @@ export function parseArgs(argv: readonly string[]): CliOptions {
 			case "--headless":
 				options.headless = true;
 				break;
+			case "--wait":
+				options.wait = true;
+				break;
+			case "--restart":
+				options.restart = true;
+				break;
+			case "--page-limit":
+				options.pageLimit = parsePageLimit(
+					requireValue(argv, index++, argument),
+				);
+				break;
 			case "--json":
 				options.json = true;
 				break;
@@ -142,11 +182,6 @@ export function parseArgs(argv: readonly string[]): CliOptions {
 		}
 	}
 
-	if (
-		options.command === "blocking" &&
-		(options.usernames.length > 0 || options.inputPath !== undefined)
-	) {
-		throw new Error("blocking はユーザー引数と --input を指定できません");
-	}
+	validateBlockingOptions(options);
 	return options;
 }

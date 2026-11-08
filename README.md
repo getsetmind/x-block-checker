@@ -89,29 +89,51 @@ Xの設定画面「ブロックしているアカウント」から一覧全体�
 ```powershell
 x-block-checker blocking
 x-block-checker blocking --json
+x-block-checker blocking --wait
+x-block-checker blocking --page-limit 50
+x-block-checker blocking --restart
 ```
 
 `auth`でログインした専用プロファイルを使用する
 設定の`users`と`input`は使用せず、ユーザー引数や`--input`の指定はエラーにする
 通常出力はユーザー名・プロフィールURLの表と件数、`--json`は`version`・`checkedAt`・`accounts`を持つ一覧を返す
-全件取得に成功した場合だけ保存済みの一覧を置き換え、取得に失敗した場合は既存の一覧を保持して終了コード`1`を返す
+既定では1回25ページまで取得し、ページごとに途中一覧と再開情報を保存する
+もう一度同じコマンドを実行すると、保存済みの続きから取得する
+`--page-limit`で1回のページ数を1〜100に変更できる
+
+`--wait`を付けると、ページ数の上限では60秒、アクセス頻度制限ではXが示す再試行時刻まで待って取得を続ける（時刻を取得できない場合は15分待つ）
+起動時に再試行時刻が未来の場合、`--wait`なしではブラウザ通信を行わず途中結果を返す
+待機中も実行ロックを保持する
+中断しても保存済みのページから再開でき、`--restart`を付けると再開情報だけを破棄して最初から取得する
+
+取得途中は終了コード`2`を返し、JSONに`complete: false`・`pages`・`startedAt`と、必要に応じて`retryAt`・`stopReason`を含める
+内部カーソルや所有アカウントIDは標準出力と途中一覧には含めない
+全件取得に成功した場合だけ完全一覧を置き換えて再開情報を削除する
+設定・認証・未対応の応答形式などのエラーは終了コード`1`を返す
+走査中にブロック関係が変わる可能性があるため、取得結果は単一時点の厳密なスナップショットではない
 
 ## 出力
 
 `outputDir` へ次のファイルを原子的に更新する
 
-| ファイル       | 内容                                                                   |
-| -------------- | ---------------------------------------------------------------------- |
-| `latest.json`  | 今回の実行結果                                                         |
-| `history.json` | ユーザー名単位の最新判定履歴                                           |
-| `blocked.md`   | 自分をブロックしているユーザー（`blocked` と `mutual`）のMarkdown一覧  |
-| `blocking.json` | `blocking`で取得した自分がブロックしているアカウント全件の最新一覧 |
-| `blocking.md` | `blocking.json`と同じ一覧のMarkdown |
-| `run.lock`     | 実行中だけ存在する重複起動防止ロック                                   |
+| ファイル                 | 内容                                                                  |
+| ------------------------ | --------------------------------------------------------------------- |
+| `latest.json`            | 今回の実行結果                                                        |
+| `history.json`           | ユーザー名単位の最新判定履歴                                          |
+| `blocked.md`             | 自分をブロックしているユーザー（`blocked` と `mutual`）のMarkdown一覧 |
+| `blocking.json`          | `blocking`で取得した自分がブロックしているアカウント全件の最新一覧    |
+| `blocking.md`            | `blocking.json`と同じ一覧のMarkdown                                   |
+| `blocking-progress.json` | 所有アカウントIDと次ページのカーソルを含む再開情報                    |
+| `blocking.partial.json`  | 取得済みの途中一覧と進捗（カーソル・所有アカウントIDは含めない）      |
+| `blocking.partial.md`    | 取得途中と明記したMarkdown一覧                                        |
+| `run.lock`               | 実行中・待機中に存在する重複起動防止ロック                            |
 
 `check`は指定ユーザーとの関係を確認し、`latest.json`・`history.json`・`blocked.md`を更新する
 `blocked.md`は履歴全体の最新判定から作成し、今回確認しなかったユーザーも保持する
-`blocking`はX設定の一覧全体を取得し、`blocking.json`・`blocking.md`を毎回全件置換する（0件なら空一覧）
+`blocking`はX設定の一覧を分割取得し、全件取得が完了した場合だけ`blocking.json`・`blocking.md`を置き換える（0件なら空一覧）
+途中一覧と再開情報は完全一覧とは別に保存する
+再開情報には認証Cookie・内部URL・query ID・認証ヘッダーを保存しない
+異なる所有アカウントでは再開できないため、アカウントを変更した場合は`--restart`で取得し直す
 両コマンドの結果は混ぜず、`check`は`blocking`の保存済み一覧を上書きしない
 
 判定状態は `blocked`、`mutual`、`blocking`、`clear`、`notFound`、`suspended`、`unknown`

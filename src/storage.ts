@@ -1,8 +1,11 @@
 import type { FileHandle } from "node:fs/promises";
 import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { isUsername } from "./config/usernames";
 import { hasErrorCode } from "./errors";
 import {
+	type BlockingAccount,
+	type BlockingCheckpoint,
 	type BlockingList,
 	type CheckResult,
 	type History,
@@ -138,8 +141,247 @@ export async function saveBlockingList(
 		),
 		"",
 	].join("\n");
-	await writeAtomic(join(outputDir, "blocking.json"), serializeJson(snapshot));
+	await writeAtomic(
+		join(outputDir, "blocking.json"),
+		serializeJson({
+			version: snapshot.version,
+			checkedAt: snapshot.checkedAt,
+			accounts: snapshot.accounts,
+		}),
+	);
 	await writeAtomic(join(outputDir, "blocking.md"), markdown);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(
+	value: Record<string, unknown>,
+	keys: readonly string[],
+): boolean {
+	return Object.keys(value).every((key) => keys.includes(key));
+}
+
+function isDate(value: unknown): value is string {
+	if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) {
+		return false;
+	}
+	return new Date(value).toISOString() === value;
+}
+
+function isAccount(value: unknown): value is BlockingAccount {
+	if (!isRecord(value) || !hasOnlyKeys(value, ["id", "username", "url"])) {
+		return false;
+	}
+	return (
+		typeof value.id === "string" &&
+		/^[1-9]\d*$/.test(value.id) &&
+		typeof value.username === "string" &&
+		isUsername(value.username) &&
+		value.url === `https://x.com/${value.username}`
+	);
+}
+
+function hasValidPosition(value: Record<string, unknown>): boolean {
+	if (value.pages === 0) {
+		return (
+			value.complete === false &&
+			value.nextCursor === null &&
+			Array.isArray(value.accounts) &&
+			value.accounts.length === 0
+		);
+	}
+	if (value.complete === true) {
+		return value.nextCursor === null;
+	}
+	if (value.nextCursor === null) {
+		return false;
+	}
+	return value.source !== "rest" || value.nextCursor !== "0";
+}
+
+function hasValidProgressState(value: Record<string, unknown>): boolean {
+	if (!hasValidPosition(value)) {
+		return false;
+	}
+	if (value.complete === true) {
+		return (
+			value.nextCursor === null &&
+			value.stopReason === undefined &&
+			value.retryAt === undefined
+		);
+	}
+
+	if (
+		value.retryAt !== undefined &&
+		(!isDate(value.retryAt) || value.stopReason !== "rateLimit")
+	) {
+		return false;
+	}
+	if (value.stopReason === "rateLimit" && value.retryAt === undefined) {
+		return false;
+	}
+	return (
+		value.stopReason === undefined ||
+		value.stopReason === "rateLimit" ||
+		value.stopReason === "pageLimit"
+	);
+}
+
+function isCursor(value: unknown): boolean {
+	if (value === null) {
+		return true;
+	}
+	return (
+		typeof value === "string" &&
+		value.length > 0 &&
+		value.length <= 8192 &&
+		!/\s|https?:\/\//i.test(value) &&
+		!Array.from(value).some((character) => character.charCodeAt(0) < 32)
+	);
+}
+
+function isCheckpoint(value: unknown): value is BlockingCheckpoint {
+	if (
+		!isRecord(value) ||
+		!hasOnlyKeys(value, [
+			"version",
+			"checkedAt",
+			"accounts",
+			"source",
+			"nextCursor",
+			"pages",
+			"startedAt",
+			"complete",
+			"retryAt",
+			"stopReason",
+			"ownerId",
+		])
+	) {
+		return false;
+	}
+	if (
+		value.version !== 1 ||
+		!isDate(value.checkedAt) ||
+		!isDate(value.startedAt) ||
+		value.startedAt > value.checkedAt
+	) {
+		return false;
+	}
+	if (!Array.isArray(value.accounts) || !value.accounts.every(isAccount)) {
+		return false;
+	}
+	if (
+		new Set(value.accounts.map((account) => account.id)).size !==
+		value.accounts.length
+	) {
+		return false;
+	}
+	if (typeof value.ownerId !== "string" || !/^[1-9]\d*$/.test(value.ownerId)) {
+		return false;
+	}
+	if (value.source !== "graphql" && value.source !== "rest") {
+		return false;
+	}
+	if (!isCursor(value.nextCursor)) {
+		return false;
+	}
+	if (
+		typeof value.pages !== "number" ||
+		!Number.isSafeInteger(value.pages) ||
+		value.pages < 0 ||
+		typeof value.complete !== "boolean"
+	) {
+		return false;
+	}
+	return hasValidProgressState(value);
+}
+
+/**
+ * @param outputDir - 保存先ディレクトリ
+ */
+export async function readBlockingCheckpoint(
+	outputDir: string,
+): Promise<BlockingCheckpoint | undefined> {
+	let contents: string;
+	try {
+		contents = await readFile(
+			join(outputDir, "blocking-progress.json"),
+			"utf8",
+		);
+	} catch (error) {
+		if (hasErrorCode(error, "ENOENT")) {
+			return undefined;
+		}
+		throw error;
+	}
+	let value: unknown;
+	try {
+		value = JSON.parse(contents);
+	} catch {
+		// biome-ignore lint/style/useErrorCause: 再開ファイルの内容を例外経由で表示しない
+		throw new Error(
+			"ブロック一覧の再開情報が不正です。--restartで最初から取得してください",
+		);
+	}
+	if (!isCheckpoint(value)) {
+		throw new Error(
+			"ブロック一覧の再開情報が不正です。--restartで最初から取得してください",
+		);
+	}
+	return value;
+}
+
+/**
+ * @param outputDir - 保存先ディレクトリ
+ * @param progress - 再開可能な取得進捗
+ */
+export async function saveBlockingCheckpoint(
+	outputDir: string,
+	progress: BlockingCheckpoint,
+): Promise<void> {
+	if (!isCheckpoint(progress)) {
+		throw new Error("ブロック一覧の再開情報が不正です");
+	}
+	await mkdir(outputDir, { recursive: true });
+	await writeAtomic(
+		join(outputDir, "blocking-progress.json"),
+		serializeJson(progress),
+	);
+	const { ownerId: _ownerId, nextCursor: _nextCursor, ...partial } = progress;
+	await writeAtomic(
+		join(outputDir, "blocking.partial.json"),
+		serializeJson(partial),
+	);
+	const markdown = [
+		progress.complete
+			? "# Xで自分がブロックしているユーザー（全件取得済み）"
+			: "# Xで自分がブロックしているユーザー（取得途中）",
+		"",
+		progress.complete
+			? "全件取得が完了しました"
+			: "全件取得済みの一覧ではありません",
+		"",
+		`確認日時: ${progress.checkedAt}`,
+		`件数: ${progress.accounts.length}`,
+		`取得ページ数: ${progress.pages}`,
+		"",
+		...progress.accounts.map(
+			(account) => `- [@${account.username}](${account.url})`,
+		),
+		"",
+	].join("\n");
+	await writeAtomic(join(outputDir, "blocking.partial.md"), markdown);
+}
+
+/**
+ * @param outputDir - 保存先ディレクトリ
+ */
+export async function clearBlockingCheckpoint(
+	outputDir: string,
+): Promise<void> {
+	await rm(join(outputDir, "blocking-progress.json"), { force: true });
 }
 
 function parseLockPid(contents: string): number | null {
@@ -197,7 +439,7 @@ async function acquireLock(lockPath: string): Promise<FileHandle> {
 			}
 
 			if (isProcessRunning(parseLockPid(contents)) || attempt > 0) {
-				throw new Error(`別の実行が進行中です: ${lockPath}`);
+				throw new Error(`別の実行が進行中です: ${lockPath}`, { cause: error });
 			}
 			await rm(lockPath, { force: true });
 		}

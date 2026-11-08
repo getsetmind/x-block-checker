@@ -5,9 +5,16 @@ import { resolve } from "node:path";
 import { type CliOptions, parseArgs } from "./config/args";
 import { resolveConfig } from "./config/resolve";
 import { hasErrorCode } from "./errors";
-import { saveBlockingList, saveResults, withRunLock } from "./storage";
 import {
-	type BlockingList,
+	clearBlockingCheckpoint,
+	readBlockingCheckpoint,
+	saveBlockingCheckpoint,
+	saveBlockingList,
+	saveResults,
+	withRunLock,
+} from "./storage";
+import {
+	type BlockingCheckpoint,
 	type CheckResult,
 	type DoctorResult,
 	type RuntimeConfig,
@@ -36,7 +43,9 @@ async function initialize(path: string): Promise<void> {
 		);
 	} catch (error) {
 		if (hasErrorCode(error, "EEXIST")) {
-			throw new Error(`設定ファイルは既に存在します: ${absolutePath}`);
+			throw new Error(`設定ファイルは既に存在します: ${absolutePath}`, {
+				cause: error,
+			});
 		}
 		throw error;
 	}
@@ -74,13 +83,16 @@ function printHelp(): void {
                           判定方式 (auto、dom、passive、direct)
       --headed            check/blockingでもブラウザを表示
       --headless          check/blockingをヘッドレス実行
+      --wait              blockingの制限解除・次バッチを待って継続
+      --page-limit <N>    blockingの1バッチのページ数 (1〜100、既定25)
+      --restart           blockingの再開情報を破棄して最初から取得
       --json              結果をJSONで標準出力
   -h, --help              ヘルプを表示
 
 終了コード:
   0  全件を判定、または一覧取得完了
   1  設定・認証・ブラウザなどの実行エラー
-  2  判定不能のユーザーが1件以上存在
+  2  判定不能のユーザーが存在、またはブロック一覧の取得途中
 `);
 }
 
@@ -142,9 +154,26 @@ function printResults(
 	}
 }
 
-function printBlockingList(snapshot: BlockingList, json: boolean): void {
+function printBlockingList(snapshot: BlockingCheckpoint, json: boolean): void {
 	if (json) {
-		process.stdout.write(`${JSON.stringify(snapshot, null, 2)}\n`);
+		const publicResult = snapshot.complete
+			? {
+					version: snapshot.version,
+					checkedAt: snapshot.checkedAt,
+					accounts: snapshot.accounts,
+				}
+			: {
+					version: snapshot.version,
+					checkedAt: snapshot.checkedAt,
+					accounts: snapshot.accounts,
+					complete: false,
+					source: snapshot.source,
+					pages: snapshot.pages,
+					startedAt: snapshot.startedAt,
+					...(snapshot.retryAt ? { retryAt: snapshot.retryAt } : {}),
+					...(snapshot.stopReason ? { stopReason: snapshot.stopReason } : {}),
+				};
+		process.stdout.write(`${JSON.stringify(publicResult, null, 2)}\n`);
 		return;
 	}
 	console.table(
@@ -154,8 +183,84 @@ function printBlockingList(snapshot: BlockingList, json: boolean): void {
 		})),
 	);
 	process.stdout.write(
-		`ブロックしているアカウント: ${snapshot.accounts.length}件\n`,
+		`ブロックしているアカウント: ${snapshot.accounts.length}件${snapshot.complete ? "" : "（取得途中）"}\n`,
 	);
+}
+
+async function waitUntil(instant: number): Promise<void> {
+	const remaining = instant - Date.now();
+	if (remaining <= 0) {
+		return;
+	}
+	process.stderr.write(
+		`次の取得まで待機します: ${new Date(instant).toISOString()}\n`,
+	);
+	await new Promise<void>((resolve) =>
+		setTimeout(resolve, Math.min(remaining, 2147483647)),
+	);
+	if (Date.now() < instant) {
+		await waitUntil(instant);
+	}
+}
+
+async function finishBlocking(
+	config: RuntimeConfig,
+	checkpoint: BlockingCheckpoint,
+): Promise<BlockingCheckpoint> {
+	await saveBlockingList(config.outputDir, checkpoint);
+	await clearBlockingCheckpoint(config.outputDir);
+	return checkpoint;
+}
+
+async function resumeBlockingBatch(
+	options: CliOptions,
+	config: RuntimeConfig,
+	checkpoint: BlockingCheckpoint | undefined,
+): Promise<BlockingCheckpoint> {
+	const retryAt = checkpoint?.retryAt ? Date.parse(checkpoint.retryAt) : 0;
+	if (retryAt > Date.now()) {
+		if (!options.wait && checkpoint) {
+			return checkpoint;
+		}
+		await waitUntil(retryAt);
+	}
+	return listBlocking(config, {
+		...(checkpoint ? { checkpoint } : {}),
+		pageLimit: options.pageLimit ?? 25,
+		onProgress: (progress) =>
+			saveBlockingCheckpoint(config.outputDir, progress),
+	});
+}
+
+function nextBlockingRun(checkpoint: BlockingCheckpoint): number {
+	if (checkpoint.stopReason === "rateLimit" && checkpoint.retryAt) {
+		return Date.parse(checkpoint.retryAt);
+	}
+	return Date.now() + 60000;
+}
+
+async function collectBlocking(
+	options: CliOptions,
+	config: RuntimeConfig,
+): Promise<BlockingCheckpoint> {
+	if (options.restart) {
+		await clearBlockingCheckpoint(config.outputDir);
+	}
+	let checkpoint = await readBlockingCheckpoint(config.outputDir);
+	if (checkpoint?.complete) {
+		return finishBlocking(config, await listBlocking(config, { checkpoint }));
+	}
+	while (true) {
+		checkpoint = await resumeBlockingBatch(options, config, checkpoint);
+		await saveBlockingCheckpoint(config.outputDir, checkpoint);
+		if (checkpoint.complete) {
+			return finishBlocking(config, checkpoint);
+		}
+		if (!options.wait) {
+			return checkpoint;
+		}
+		await waitUntil(nextBlockingRun(checkpoint));
+	}
 }
 
 async function main(): Promise<number> {
@@ -181,14 +286,14 @@ async function main(): Promise<number> {
 		}
 		case "blocking": {
 			const config = await resolveConfig(options);
-			const snapshot = await withRunLock(config.outputDir, async () => {
-				const result = await listBlocking(config);
-				await saveBlockingList(config.outputDir, result);
-				return result;
-			});
+			const snapshot = await withRunLock(config.outputDir, () =>
+				collectBlocking(options, config),
+			);
 			printBlockingList(snapshot, options.json);
-			if (!options.json) process.stderr.write(`出力: ${config.outputDir}\n`);
-			return 0;
+			if (!options.json) {
+				process.stderr.write(`出力: ${config.outputDir}\n`);
+			}
+			return snapshot.complete ? 0 : 2;
 		}
 		case "check": {
 			const config = await resolveConfig(options);

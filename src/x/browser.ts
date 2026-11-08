@@ -6,7 +6,7 @@ import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { appDataDir } from "../config/paths";
 import { hasErrorCode } from "../errors";
 import type {
-	BlockingList,
+	BlockingCheckpoint,
 	CheckResult,
 	DoctorResult,
 	RuntimeConfig,
@@ -33,12 +33,43 @@ export function ignoredDefaultBrowserArgs(
 	return ["--use-mock-keychain"];
 }
 
+interface BlockingOptions {
+	checkpoint?: BlockingCheckpoint;
+	onProgress?: (progress: BlockingCheckpoint) => Promise<void>;
+	pageLimit?: number;
+}
+
+async function blockingOwnerId(browser: Browser): Promise<string> {
+	const cookies = await browser.defaultBrowserContext().cookies();
+	const ids = new Set(
+		cookies
+			.filter(
+				(cookie) =>
+					cookie.name === "twid" &&
+					cookie.domain.replace(/^\./, "").toLowerCase() === "x.com",
+			)
+			.map(
+				(cookie) =>
+					cookie.value.replace(/%3d/gi, "=").match(/^"?u=([1-9]\d*)"?$/)?.[1],
+			),
+	);
+	const [id] = ids;
+	if (ids.size === 1 && id) {
+		return id;
+	}
+	throw new Error(
+		"Xのログインアカウントを確認できません。authを再実行してください",
+	);
+}
+
 /**
  * @param config - 解決済みの実行時設定
+ * @param options - アカウントに紐付くチェックポイントと永続化処理
  */
 export async function listBlocking(
 	config: RuntimeConfig,
-): Promise<BlockingList> {
+	options: BlockingOptions = {},
+): Promise<BlockingCheckpoint> {
 	const { browser, page } = await launchBrowser(config, config.headless);
 	try {
 		if (!(await hasAuthCookie(browser))) {
@@ -46,7 +77,22 @@ export async function listBlocking(
 				"Xへ未認証です。先に x-block-checker auth を実行してください",
 			);
 		}
-		return await readBlockingList(page, config.timeoutMs);
+		const ownerId = await blockingOwnerId(browser);
+		if (options.checkpoint && options.checkpoint.ownerId !== ownerId) {
+			throw new Error(
+				"保存済みの進捗とログインアカウントが異なります。別の出力先を使うか --restart を指定してください",
+			);
+		}
+		const onProgress = async (
+			progress: Omit<BlockingCheckpoint, "ownerId">,
+		): Promise<void> => {
+			await options.onProgress?.({ ...progress, ownerId });
+		};
+		const result = await readBlockingList(page, config.timeoutMs, {
+			...options,
+			onProgress,
+		});
+		return { ...result, ownerId };
 	} finally {
 		await browser.close();
 	}
