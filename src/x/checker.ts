@@ -41,18 +41,21 @@ async function readResponse(
 	response: HTTPResponse,
 ): Promise<void> {
 	try {
-		for (const relationship of extractRelationships(await response.json()))
+		for (const relationship of extractRelationships(await response.json())) {
 			state.relationships.set(
 				relationship.username.toLowerCase(),
 				relationship,
 			);
+		}
 	} catch {
 		// GraphQLレスポンスを読めない場合はDOM判定を続ける
 	}
 }
 
 function trackResponse(state: CheckerState, response: HTTPResponse): void {
-	if (!isUserByScreenName(response.url())) return;
+	if (!isUserByScreenName(response.url())) {
+		return;
+	}
 	const task = readResponse(state, response);
 	state.responseTasks.add(task);
 	void task.finally(() => state.responseTasks.delete(task));
@@ -63,14 +66,18 @@ async function directRelationship(
 	username: string,
 	timeoutMs: number,
 ): Promise<Relationship | undefined> {
-	if (!state.graphqlTemplate) return;
+	if (!state.graphqlTemplate) {
+		return;
+	}
 	let request: ReplayRequest | null;
 	try {
 		request = createReplayRequest(state.graphqlTemplate, username);
 	} catch {
 		return;
 	}
-	if (!request) return;
+	if (!request) {
+		return;
+	}
 
 	try {
 		const response = await state.page.evaluate(
@@ -92,7 +99,9 @@ async function directRelationship(
 			},
 			{ ...request, timeoutMs },
 		);
-		if (!response.ok) return;
+		if (!response.ok) {
+			return;
+		}
 		return extractRelationships(JSON.parse(response.text)).find(
 			(relationship) =>
 				relationship.username.toLowerCase() === username.toLowerCase(),
@@ -143,14 +152,17 @@ async function checkPage(
 			timeout: timeoutMs,
 		});
 	} catch (error) {
-		if (!(error instanceof TimeoutError)) throw error;
+		if (!(error instanceof TimeoutError)) {
+			throw error;
+		}
 	}
 
 	while (Date.now() - startedAt < timeoutMs) {
 		await delay(500);
 		await Promise.all([...state.responseTasks]);
-		if (/\/(?:i\/flow\/login|login)(?:[/?#]|$)/.test(state.page.url()))
+		if (/\/(?:i\/flow\/login|login)(?:[/?#]|$)/.test(state.page.url())) {
 			throw new Error("Xの認証が切れています。authを再実行してください");
+		}
 		const elapsedMs = Date.now() - startedAt;
 		const pageState = await readPageState(state.page);
 		const relationship =
@@ -169,7 +181,9 @@ async function checkUser(
 	username: string,
 	timeoutMs: number,
 ): Promise<CheckResult> {
-	if (!isUsername(username)) throw new Error("不正なユーザー名です");
+	if (!isUsername(username)) {
+		throw new Error("不正なユーザー名です");
+	}
 	if (
 		(state.mode === "auto" || state.mode === "direct") &&
 		state.graphqlTemplate
@@ -185,9 +199,12 @@ async function checkUser(
 			relationship,
 			Number.POSITIVE_INFINITY,
 		);
-		if (status) return createResult(username, status, visibility ?? "unknown");
-		if (state.mode === "direct")
+		if (status) {
+			return createResult(username, status, visibility ?? "unknown");
+		}
+		if (state.mode === "direct") {
 			return createResult(username, "unknown", visibility ?? "unknown");
+		}
 	}
 	return checkPage(state, username, timeoutMs);
 }
@@ -207,11 +224,14 @@ export function createXChecker(page: Page, mode: RelationshipMode): CheckUser {
 	};
 	if (mode !== "dom") {
 		page.on("response", (response) => trackResponse(state, response));
-		if (mode === "auto" || mode === "direct")
+		if (mode === "auto" || mode === "direct") {
 			page.on("request", (request) => {
 				const template = captureGraphqlTemplate(request);
-				if (template) state.graphqlTemplate = template;
+				if (template) {
+					state.graphqlTemplate = template;
+				}
 			});
+		}
 	}
 	return (username, timeoutMs) => checkUser(state, username, timeoutMs);
 }

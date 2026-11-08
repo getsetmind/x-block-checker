@@ -2,7 +2,12 @@ import type { FileHandle } from "node:fs/promises";
 import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { hasErrorCode } from "./errors";
-import { type CheckResult, type History, statusLabels } from "./types";
+import {
+	type BlockingList,
+	type CheckResult,
+	type History,
+	statusLabels,
+} from "./types";
 
 function emptyHistory(): History {
 	return {
@@ -13,7 +18,9 @@ function emptyHistory(): History {
 }
 
 function isHistory(value: unknown): value is History {
-	if (typeof value !== "object" || value === null) return false;
+	if (typeof value !== "object" || value === null) {
+		return false;
+	}
 	const candidate = value as Partial<History>;
 	return (
 		candidate.version === 1 &&
@@ -41,10 +48,14 @@ async function writeAtomic(path: string, contents: string): Promise<void> {
 async function readHistory(path: string): Promise<History> {
 	try {
 		const value: unknown = JSON.parse(await readFile(path, "utf8"));
-		if (!isHistory(value)) throw new Error("未対応の履歴形式です");
+		if (!isHistory(value)) {
+			throw new Error("未対応の履歴形式です");
+		}
 		return value;
 	} catch (error) {
-		if (hasErrorCode(error, "ENOENT")) return emptyHistory();
+		if (hasErrorCode(error, "ENOENT")) {
+			return emptyHistory();
+		}
 		throw new Error(`履歴を読み込めません: ${path}`, { cause: error });
 	}
 }
@@ -57,7 +68,9 @@ function mergeHistory(
 		Object.create(null) as History["results"],
 		history.results,
 	);
-	for (const result of current) results[result.username.toLowerCase()] = result;
+	for (const result of current) {
+		results[result.username.toLowerCase()] = result;
+	}
 	return {
 		version: 1,
 		updatedAt: new Date().toISOString(),
@@ -103,13 +116,41 @@ export async function saveResults(
 	);
 }
 
+/**
+ * X設定から取得したブロック一覧で保存済みの一覧を置き換える
+ *
+ * @param outputDir - 保存先ディレクトリ
+ * @param snapshot - 全件取得済みの一覧
+ */
+export async function saveBlockingList(
+	outputDir: string,
+	snapshot: BlockingList,
+): Promise<void> {
+	await mkdir(outputDir, { recursive: true });
+	const markdown = [
+		"# Xで自分がブロックしているユーザー",
+		"",
+		`確認日時: ${snapshot.checkedAt}`,
+		`件数: ${snapshot.accounts.length}`,
+		"",
+		...snapshot.accounts.map(
+			(account) => `- [@${account.username}](${account.url})`,
+		),
+		"",
+	].join("\n");
+	await writeAtomic(join(outputDir, "blocking.json"), serializeJson(snapshot));
+	await writeAtomic(join(outputDir, "blocking.md"), markdown);
+}
+
 function parseLockPid(contents: string): number | null {
 	const pid = Number(contents.split(/\s+/, 1)[0]);
 	return Number.isInteger(pid) && pid > 0 ? pid : null;
 }
 
 function isProcessRunning(pid: number | null): boolean {
-	if (pid === null) return false;
+	if (pid === null) {
+		return false;
+	}
 	try {
 		process.kill(pid, 0);
 		return true;
@@ -134,7 +175,9 @@ async function readLockContents(lockPath: string): Promise<string | undefined> {
 	try {
 		return await readFile(lockPath, "utf8");
 	} catch (error) {
-		if (hasErrorCode(error, "ENOENT")) return undefined;
+		if (hasErrorCode(error, "ENOENT")) {
+			return undefined;
+		}
 		throw error;
 	}
 }
@@ -144,13 +187,18 @@ async function acquireLock(lockPath: string): Promise<FileHandle> {
 		try {
 			return await createLock(lockPath);
 		} catch (error) {
-			if (!hasErrorCode(error, "EEXIST")) throw error;
+			if (!hasErrorCode(error, "EEXIST")) {
+				throw error;
+			}
 
 			const contents = await readLockContents(lockPath);
-			if (contents === undefined) continue;
+			if (contents === undefined) {
+				continue;
+			}
 
-			if (isProcessRunning(parseLockPid(contents)) || attempt > 0)
+			if (isProcessRunning(parseLockPid(contents)) || attempt > 0) {
 				throw new Error(`別の実行が進行中です: ${lockPath}`);
+			}
 			await rm(lockPath, { force: true });
 		}
 	}

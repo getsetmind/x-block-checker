@@ -5,7 +5,13 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { appDataDir } from "../config/paths";
 import { hasErrorCode } from "../errors";
-import type { CheckResult, DoctorResult, RuntimeConfig } from "../types";
+import type {
+	BlockingList,
+	CheckResult,
+	DoctorResult,
+	RuntimeConfig,
+} from "../types";
+import { readBlockingList } from "./blocking";
 import { createXChecker } from "./checker";
 
 interface LaunchedBrowser {
@@ -21,8 +27,29 @@ interface LaunchedBrowser {
 export function ignoredDefaultBrowserArgs(
 	platform: NodeJS.Platform = process.platform,
 ): string[] | undefined {
-	if (platform !== "darwin") return undefined;
+	if (platform !== "darwin") {
+		return undefined;
+	}
 	return ["--use-mock-keychain"];
+}
+
+/**
+ * @param config - 解決済みの実行時設定
+ */
+export async function listBlocking(
+	config: RuntimeConfig,
+): Promise<BlockingList> {
+	const { browser, page } = await launchBrowser(config, config.headless);
+	try {
+		if (!(await hasAuthCookie(browser))) {
+			throw new Error(
+				"Xへ未認証です。先に x-block-checker auth を実行してください",
+			);
+		}
+		return await readBlockingList(page, config.timeoutMs);
+	} finally {
+		await browser.close();
+	}
 }
 
 type ProgressCallback = (
@@ -39,14 +66,16 @@ function isWithinPath(path: string, parent: string): boolean {
 function regularBrowserProfileRoots(): string[] {
 	if (process.platform === "win32") {
 		const local = process.env.LOCALAPPDATA;
-		if (!local) return [];
+		if (!local) {
+			return [];
+		}
 		return [
 			join(local, "Google", "Chrome", "User Data"),
 			join(local, "BraveSoftware", "Brave-Browser", "User Data"),
 			join(local, "Microsoft", "Edge", "User Data"),
 		];
 	}
-	if (process.platform === "darwin")
+	if (process.platform === "darwin") {
 		return [
 			join(homedir(), "Library", "Application Support", "Google", "Chrome"),
 			join(homedir(), "Library", "Application Support", "Chromium"),
@@ -59,6 +88,7 @@ function regularBrowserProfileRoots(): string[] {
 			),
 			join(homedir(), "Library", "Application Support", "Microsoft Edge"),
 		];
+	}
 	return [
 		join(homedir(), ".config", "google-chrome"),
 		join(homedir(), ".config", "chromium"),
@@ -70,10 +100,11 @@ function regularBrowserProfileRoots(): string[] {
 async function ensureDedicatedProfile(profileDir: string): Promise<void> {
 	if (
 		regularBrowserProfileRoots().some((root) => isWithinPath(profileDir, root))
-	)
+	) {
 		throw new Error(
 			"普段使いのブラウザプロファイルは使用できません。x-block-checker専用の空ディレクトリを指定してください",
 		);
+	}
 
 	await mkdir(profileDir, { recursive: true });
 	const markerPath = join(profileDir, ".x-block-checker-profile");
@@ -81,19 +112,24 @@ async function ensureDedicatedProfile(profileDir: string): Promise<void> {
 		await access(markerPath);
 		return;
 	} catch (error) {
-		if (!hasErrorCode(error, "ENOENT")) throw error;
+		if (!hasErrorCode(error, "ENOENT")) {
+			throw error;
+		}
 	}
 
 	const isDefaultProfile =
 		resolve(profileDir) === resolve(appDataDir(), "profile");
-	if (!isDefaultProfile && (await readdir(profileDir)).length > 0)
+	if (!isDefaultProfile && (await readdir(profileDir)).length > 0) {
 		throw new Error(
 			`専用profileのmarkerがありません: ${profileDir}。空ディレクトリを指定してください`,
 		);
+	}
 	try {
 		await writeFile(markerPath, '{"version":1}\n', { flag: "wx" });
 	} catch (error) {
-		if (!hasErrorCode(error, "EEXIST")) throw error;
+		if (!hasErrorCode(error, "EEXIST")) {
+			throw error;
+		}
 	}
 }
 
@@ -168,17 +204,19 @@ export async function authenticate(config: RuntimeConfig): Promise<void> {
 		browserProcess.once("error", reject);
 		browserProcess.once("exit", resolve);
 	});
-	if (exitCode !== 0)
+	if (exitCode !== 0) {
 		throw new Error(
 			`認証用ブラウザが異常終了しました: ${exitCode ?? "signal"}`,
 		);
+	}
 
 	const { browser } = await launchBrowser(config, true);
 	try {
-		if (!(await hasAuthCookie(browser)))
+		if (!(await hasAuthCookie(browser))) {
 			throw new Error(
 				"Xへのログインを確認できませんでした。authを再実行してください",
 			);
+		}
 	} finally {
 		await browser.close();
 	}
@@ -196,10 +234,11 @@ export async function checkUsers(
 ): Promise<CheckResult[]> {
 	const { browser, page } = await launchBrowser(config, config.headless);
 	try {
-		if (!(await hasAuthCookie(browser)))
+		if (!(await hasAuthCookie(browser))) {
 			throw new Error(
 				"Xへ未認証です。先に x-block-checker auth を実行してください",
 			);
+		}
 		const checkUser = createXChecker(page, config.relationshipMode);
 		const results: CheckResult[] = [];
 		for (const [index, username] of config.users.entries()) {

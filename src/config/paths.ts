@@ -101,15 +101,17 @@ export function appDataDir(): string {
  */
 export function findBrowserExecutable(explicitPath?: string): string {
 	if (explicitPath) {
-		if (!existsSync(explicitPath))
+		if (!existsSync(explicitPath)) {
 			throw new Error(`ブラウザが見つかりません: ${explicitPath}`);
+		}
 		return explicitPath;
 	}
 
 	const found = browserExecutableCandidates().find(existsSync);
-	if (!found)
+	if (!found) {
 		throw new Error(
 			"Chrome、Brave、Edge、Chromiumの実行ファイルが見つかりません。設定の browserExecutable で指定してください",
 		);
+	}
 	return found;
 }

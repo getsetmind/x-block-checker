@@ -8,12 +8,20 @@ export const MIN_CLEAR_WAIT_MS = 5000;
 function classifyRelationship(
 	relationship: Relationship | undefined,
 ): Status | null {
-	if (!relationship) return null;
+	if (!relationship) {
+		return null;
+	}
 
 	const { blockedBy, blocking } = relationship;
-	if (blockedBy === true) return blocking === true ? "mutual" : "blocked";
-	if (blockedBy === false && blocking === true) return "blocking";
-	if (blockedBy === false && blocking === false) return "clear";
+	if (blockedBy === true) {
+		return blocking === true ? "mutual" : "blocked";
+	}
+	if (blockedBy === false && blocking === true) {
+		return "blocking";
+	}
+	if (blockedBy === false && blocking === false) {
+		return "clear";
+	}
 	return null;
 }
 
@@ -33,22 +41,30 @@ export function classify(
 		/ブロックされています|あなたをブロックしました|ブロックされているため|you(?:'|’)re blocked|blocked you|has blocked you/i.test(
 			state.text,
 		)
-	)
+	) {
 		return relationship?.blocking === true ? "mutual" : "blocked";
-	if (/アカウントは凍結|account (?:is|has been) suspended/i.test(state.text))
+	}
+	if (/アカウントは凍結|account (?:is|has been) suspended/i.test(state.text)) {
 		return "suspended";
+	}
 	if (
 		/アカウントは存在しません|this account doesn(?:'|’)t exist/i.test(
 			state.text,
 		)
-	)
+	) {
 		return "notFound";
+	}
 
 	const relationshipStatus = classifyRelationship(relationship);
-	if (relationshipStatus) return relationshipStatus;
-	if (elapsedMs < MIN_CLEAR_WAIT_MS) return null;
-	if (state.profileLoaded && !/ブロックを解除|unblock/i.test(state.text))
+	if (relationshipStatus) {
+		return relationshipStatus;
+	}
+	if (elapsedMs < MIN_CLEAR_WAIT_MS) {
+		return null;
+	}
+	if (state.profileLoaded && !/ブロックを解除|unblock/i.test(state.text)) {
 		return "clear";
+	}
 	return null;
 }
 
@@ -64,14 +80,21 @@ export function classifyVisibility(
 	relationship: Relationship | undefined,
 	elapsedMs: number,
 ): Visibility | null {
-	if (relationship?.protected === true) return "protected";
-	if (relationship?.protected === false) return "public";
+	if (relationship?.protected === true) {
+		return "protected";
+	}
+	if (relationship?.protected === false) {
+		return "public";
+	}
 	if (
 		/このアカウント(?:のポスト)?は非公開|ポストは非公開です|these posts are protected|this account is private/i.test(
 			state.text,
 		)
-	)
+	) {
 		return "protected";
-	if (elapsedMs >= MIN_CLEAR_WAIT_MS && state.profileLoaded) return "unknown";
+	}
+	if (elapsedMs >= MIN_CLEAR_WAIT_MS && state.profileLoaded) {
+		return "unknown";
+	}
 	return null;
 }

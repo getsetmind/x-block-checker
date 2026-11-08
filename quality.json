@@ -1,46 +1,25 @@
 {
 	"$schema": "./node_modules/@yuu1111/quality-check/schema.json",
-	"biome": {
-		"enabled": true
-	},
-	"typecheck": {
-		"enabled": true
-	},
-	"knip": {
-		"enabled": true
-	},
-	"code-style-check": {
-		"enabled": true
-	},
-	"comment-check": {
-		"enabled": true,
+	"biome": true,
+	"typecheck": true,
+	"knip": true,
+	"code": true,
+	"comment": {
 		"rules": {
-			"shape": {
-				"cramped-comment": "on"
-			},
-			"content": {
-				"japanese-period": "on"
-			}
+			"cramped-comment": "on",
+			"japanese-period": "on"
 		}
 	},
-	"document-style-check": {
-		"enabled": true,
+	"markdown": {
 		"rules": {
-			"typography": {
-				"japanese-period": "on"
-			}
+			"japanese-period": "on"
 		}
 	},
-	"tsdoc-check": {
-		"enabled": true,
+	"tsdoc": {
 		"rules": {
-			"syntax": {
-				"single-line-doc": "error",
-				"tsdoc-tag": "error"
-			},
-			"documentation": {
-				"missing-doc": "error"
-			}
+			"single-line-doc": "error",
+			"tsdoc-tag": "error",
+			"missing-doc": "error"
 		}
 	}
 }

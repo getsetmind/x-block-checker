@@ -5,15 +5,16 @@ import { resolve } from "node:path";
 import { type CliOptions, parseArgs } from "./config/args";
 import { resolveConfig } from "./config/resolve";
 import { hasErrorCode } from "./errors";
-import { saveResults, withRunLock } from "./storage";
+import { saveBlockingList, saveResults, withRunLock } from "./storage";
 import {
+	type BlockingList,
 	type CheckResult,
 	type DoctorResult,
 	type RuntimeConfig,
 	statusLabels,
 	visibilityLabels,
 } from "./types";
-import { authenticate, checkUsers, diagnose } from "./x/browser";
+import { authenticate, checkUsers, diagnose, listBlocking } from "./x/browser";
 
 async function initialize(path: string): Promise<void> {
 	const absolutePath = resolve(path);
@@ -34,8 +35,9 @@ async function initialize(path: string): Promise<void> {
 			{ encoding: "utf8", flag: "wx" },
 		);
 	} catch (error) {
-		if (hasErrorCode(error, "EEXIST"))
+		if (hasErrorCode(error, "EEXIST")) {
 			throw new Error(`設定ファイルは既に存在します: ${absolutePath}`);
+		}
 		throw error;
 	}
 	process.stdout.write(`設定ファイルを作成しました: ${absolutePath}\n`);
@@ -51,29 +53,32 @@ function printHelp(): void {
   x-block-checker auth [--config <path>]
   x-block-checker doctor [--config <path>] [--json]
   x-block-checker check [@user ...] [options]
+  x-block-checker blocking [options]
 
 コマンド:
   init                    設定ファイルの雛形を作成
   auth                    専用プロファイルを開いてXへログイン
   doctor                  ブラウザと認証状態を診断
   check                   設定または引数のユーザーを確認
+  blocking                X設定のブロックしているアカウント一覧を取得
+                          users/input設定は無視し、ユーザー引数・--inputは不可
 
 オプション:
   -c, --config <path>     設定ファイル (既定: x-block-checker.config.json)
   -i, --input <path>      改行・空白・カンマ区切りのユーザー一覧
-      --output-dir <path> latest.json、history.json、blocked.mdの保存先
+      --output-dir <path> checkの結果・履歴、blockingの一覧の保存先
       --profile-dir <path> ブラウザプロファイル保存先
       --browser <path>    Chrome、Brave、Edge、Chromiumの実行ファイル
       --timeout <秒>      1件あたりの待機上限 (5〜120)
       --relationship-mode <mode>
                           判定方式 (auto、dom、passive、direct)
-      --headed            checkでもブラウザを表示
-      --headless          checkをヘッドレス実行
+      --headed            check/blockingでもブラウザを表示
+      --headless          check/blockingをヘッドレス実行
       --json              結果をJSONで標準出力
   -h, --help              ヘルプを表示
 
 終了コード:
-  0  全件を判定
+  0  全件を判定、または一覧取得完了
   1  設定・認証・ブラウザなどの実行エラー
   2  判定不能のユーザーが1件以上存在
 `);
@@ -105,17 +110,19 @@ async function runCheck(
 	options: CliOptions,
 	config: RuntimeConfig,
 ): Promise<CheckResult[]> {
-	if (config.users.length === 0)
+	if (config.users.length === 0) {
 		throw new Error(
 			"確認するユーザーを設定、引数、または --input で指定してください",
 		);
+	}
 
 	return withRunLock(config.outputDir, async () => {
 		const checked = await checkUsers(config, (index, total, result) => {
-			if (!options.json)
+			if (!options.json) {
 				process.stderr.write(
 					`[${index}/${total}] @${result.username}: ${statusLabels[result.status]} / ${visibilityLabels[result.visibility]}\n`,
 				);
+			}
 		});
 		await saveResults(config.outputDir, checked);
 		return checked;
@@ -127,11 +134,28 @@ function printResults(
 	json: boolean,
 	outputDir: string,
 ): void {
-	if (json) process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
-	else {
+	if (json) {
+		process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
+	} else {
 		printTable(results);
 		process.stderr.write(`出力: ${outputDir}\n`);
 	}
+}
+
+function printBlockingList(snapshot: BlockingList, json: boolean): void {
+	if (json) {
+		process.stdout.write(`${JSON.stringify(snapshot, null, 2)}\n`);
+		return;
+	}
+	console.table(
+		snapshot.accounts.map((account) => ({
+			ユーザー: `@${account.username}`,
+			URL: account.url,
+		})),
+	);
+	process.stdout.write(
+		`ブロックしているアカウント: ${snapshot.accounts.length}件\n`,
+	);
 }
 
 async function main(): Promise<number> {
@@ -154,6 +178,17 @@ async function main(): Promise<number> {
 			const result = await diagnose(config);
 			printDoctorResult(result, options.json);
 			return result.ready ? 0 : 1;
+		}
+		case "blocking": {
+			const config = await resolveConfig(options);
+			const snapshot = await withRunLock(config.outputDir, async () => {
+				const result = await listBlocking(config);
+				await saveBlockingList(config.outputDir, result);
+				return result;
+			});
+			printBlockingList(snapshot, options.json);
+			if (!options.json) process.stderr.write(`出力: ${config.outputDir}\n`);
+			return 0;
 		}
 		case "check": {
 			const config = await resolveConfig(options);

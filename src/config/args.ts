@@ -3,7 +3,13 @@ import { type RelationshipMode, relationshipModes } from "../types";
 /**
  * CLIサブコマンド
  */
-export type Command = "auth" | "check" | "doctor" | "init" | "help";
+export type Command =
+	| "auth"
+	| "check"
+	| "blocking"
+	| "doctor"
+	| "init"
+	| "help";
 
 /**
  * 解析済みのCLI引数
@@ -23,7 +29,9 @@ export interface CliOptions {
 }
 
 function isCommand(value: string | undefined): value is Command {
-	return ["auth", "check", "doctor", "init", "help"].includes(value ?? "");
+	return ["auth", "check", "blocking", "doctor", "init", "help"].includes(
+		value ?? "",
+	);
 }
 
 function requireValue(
@@ -32,21 +40,24 @@ function requireValue(
 	option: string,
 ): string {
 	const value = argv[index + 1];
-	if (!value || value.startsWith("--"))
+	if (!value || value.startsWith("--")) {
 		throw new Error(`${option} の値を指定してください`);
+	}
 	return value;
 }
 
 function parseTimeout(value: string): number {
 	const seconds = Number(value);
-	if (!Number.isFinite(seconds) || seconds < 5 || seconds > 120)
+	if (!Number.isFinite(seconds) || seconds < 5 || seconds > 120) {
 		throw new Error("--timeout は5〜120秒で指定してください");
+	}
 	return seconds;
 }
 
 function parseRelationshipMode(value: string): RelationshipMode {
-	if (relationshipModes.includes(value as RelationshipMode))
+	if (relationshipModes.includes(value as RelationshipMode)) {
 		return value as RelationshipMode;
+	}
 	throw new Error(
 		"--relationship-mode は auto、dom、passive、direct のいずれかで指定してください",
 	);
@@ -78,7 +89,9 @@ export function parseArgs(argv: readonly string[]): CliOptions {
 
 	for (; index < argv.length; index++) {
 		const argument = argv[index];
-		if (argument === undefined) continue;
+		if (argument === undefined) {
+			continue;
+		}
 
 		switch (argument) {
 			case "--config":
@@ -122,11 +135,18 @@ export function parseArgs(argv: readonly string[]): CliOptions {
 				options.command = "help";
 				break;
 			default:
-				if (argument.startsWith("--"))
+				if (argument.startsWith("--")) {
 					throw new Error(`不明なオプションです: ${argument}`);
+				}
 				options.usernames.push(argument);
 		}
 	}
 
+	if (
+		options.command === "blocking" &&
+		(options.usernames.length > 0 || options.inputPath !== undefined)
+	) {
+		throw new Error("blocking はユーザー引数と --input を指定できません");
+	}
 	return options;
 }

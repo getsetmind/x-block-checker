@@ -42,7 +42,9 @@ function hasValidOptionalField(
 }
 
 function isConfigFile(value: unknown): value is ConfigFile {
-	if (!isRecord(value)) return false;
+	if (!isRecord(value)) {
+		return false;
+	}
 	return (
 		hasValidOptionalField(value, "users", isStringArray) &&
 		hasValidOptionalField(value, "input", isString) &&
@@ -58,10 +60,14 @@ function isConfigFile(value: unknown): value is ConfigFile {
 async function readOptionalJson(path: string): Promise<ConfigFile> {
 	try {
 		const value: unknown = JSON.parse(await readFile(path, "utf8"));
-		if (!isConfigFile(value)) throw new Error("設定ファイルの形式が不正です");
+		if (!isConfigFile(value)) {
+			throw new Error("設定ファイルの形式が不正です");
+		}
 		return value;
 	} catch (error) {
-		if (hasErrorCode(error, "ENOENT")) return {};
+		if (hasErrorCode(error, "ENOENT")) {
+			return {};
+		}
 		throw new Error(`設定ファイルを読み込めません: ${path}`, { cause: error });
 	}
 }
@@ -72,8 +78,9 @@ function resolveFrom(base: string, path: string): string {
 
 function resolveTimeoutSeconds(options: CliOptions, file: ConfigFile): number {
 	const seconds = options.timeoutSeconds ?? file.timeoutSeconds ?? 20;
-	if (!Number.isFinite(seconds) || seconds < 5 || seconds > 120)
+	if (!Number.isFinite(seconds) || seconds < 5 || seconds > 120) {
 		throw new Error("timeoutSeconds は5〜120で指定してください");
+	}
 	return seconds;
 }
 
@@ -82,7 +89,9 @@ function resolveRelationshipMode(
 	file: ConfigFile,
 ): RelationshipMode {
 	const mode = options.relationshipMode ?? file.relationshipMode ?? "auto";
-	if (relationshipModes.includes(mode)) return mode;
+	if (relationshipModes.includes(mode)) {
+		return mode;
+	}
 	throw new Error(
 		"relationshipMode は auto、dom、passive、direct のいずれかで指定してください",
 	);
@@ -93,10 +102,14 @@ async function resolveUsernames(
 	file: ConfigFile,
 	base: string,
 ): Promise<string[]> {
+	if (options.command === "blocking") {
+		return [];
+	}
 	const values = [...(file.users ?? []), ...options.usernames];
 	const inputPath = options.inputPath ?? file.input;
-	if (inputPath)
+	if (inputPath) {
 		values.push(await readFile(resolveFrom(base, inputPath), "utf8"));
+	}
 	return parseUsernames(values);
 }
 

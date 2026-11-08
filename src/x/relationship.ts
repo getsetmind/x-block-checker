@@ -48,8 +48,9 @@ function extractRelationship(record: JsonRecord): Relationship | undefined {
 		(blockedBy === undefined &&
 			blocking === undefined &&
 			protectedAccount === undefined)
-	)
+	) {
 		return;
+	}
 
 	return {
 		username,
@@ -69,14 +70,20 @@ export function extractRelationships(payload: unknown): Relationship[] {
 	const seen = new Set<object>();
 
 	const walk = (value: unknown): void => {
-		if (typeof value !== "object" || value === null || seen.has(value)) return;
+		if (typeof value !== "object" || value === null || seen.has(value)) {
+			return;
+		}
 		seen.add(value);
 
 		if (Array.isArray(value)) {
-			for (const child of value) walk(child);
+			for (const child of value) {
+				walk(child);
+			}
 			return;
 		}
-		if (!isRecord(value)) return;
+		if (!isRecord(value)) {
+			return;
+		}
 
 		const relationship = extractRelationship(value);
 		if (relationship) {
@@ -87,7 +94,9 @@ export function extractRelationships(payload: unknown): Relationship[] {
 			});
 		}
 
-		for (const child of Object.values(value)) walk(child);
+		for (const child of Object.values(value)) {
+			walk(child);
+		}
 	};
 
 	walk(payload);

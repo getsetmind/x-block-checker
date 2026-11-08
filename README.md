@@ -30,11 +30,14 @@ npmのグローバルリンクは使用しない
 
 ```json
 {
-  "users": ["user1", "user2"],
-  "outputDir": "./data",
-  "timeoutSeconds": 20,
-  "headless": true,
-  "relationshipMode": "auto"
+	"users": [
+		"user1",
+		"user2"
+	],
+	"outputDir": "./data",
+	"timeoutSeconds": 20,
+	"headless": true,
+	"relationshipMode": "auto"
 }
 ```
 
@@ -79,16 +82,37 @@ x-block-checker check --json
 .\dist\x-block-checker.exe check
 ```
 
+### 自分がブロックしているアカウントの一覧
+
+Xの設定画面「ブロックしているアカウント」から一覧全体を取得するには`blocking`を使う
+
+```powershell
+x-block-checker blocking
+x-block-checker blocking --json
+```
+
+`auth`でログインした専用プロファイルを使用する
+設定の`users`と`input`は使用せず、ユーザー引数や`--input`の指定はエラーにする
+通常出力はユーザー名・プロフィールURLの表と件数、`--json`は`version`・`checkedAt`・`accounts`を持つ一覧を返す
+全件取得に成功した場合だけ保存済みの一覧を置き換え、取得に失敗した場合は既存の一覧を保持して終了コード`1`を返す
+
 ## 出力
 
 `outputDir` へ次のファイルを原子的に更新する
 
-| ファイル | 内容 |
-|---|---|
-| `latest.json` | 今回の実行結果 |
-| `history.json` | ユーザー名単位の最新判定履歴 |
-| `blocked.md` | `blocked` と `mutual` のMarkdown一覧 |
-| `run.lock` | 実行中だけ存在する重複起動防止ロック |
+| ファイル       | 内容                                                                   |
+| -------------- | ---------------------------------------------------------------------- |
+| `latest.json`  | 今回の実行結果                                                         |
+| `history.json` | ユーザー名単位の最新判定履歴                                           |
+| `blocked.md`   | 自分をブロックしているユーザー（`blocked` と `mutual`）のMarkdown一覧  |
+| `blocking.json` | `blocking`で取得した自分がブロックしているアカウント全件の最新一覧 |
+| `blocking.md` | `blocking.json`と同じ一覧のMarkdown |
+| `run.lock`     | 実行中だけ存在する重複起動防止ロック                                   |
+
+`check`は指定ユーザーとの関係を確認し、`latest.json`・`history.json`・`blocked.md`を更新する
+`blocked.md`は履歴全体の最新判定から作成し、今回確認しなかったユーザーも保持する
+`blocking`はX設定の一覧全体を取得し、`blocking.json`・`blocking.md`を毎回全件置換する（0件なら空一覧）
+両コマンドの結果は混ぜず、`check`は`blocking`の保存済み一覧を上書きしない
 
 判定状態は `blocked`、`mutual`、`blocking`、`clear`、`notFound`、`suspended`、`unknown`
 これとは別に公開範囲を `public`、`protected`、`unknown` で出力するため、「未ブロックかつ鍵アカウント」のように両方の情報を保持できる
@@ -130,28 +154,28 @@ cronから実行する場合も、同じOSユーザーで事前に`x-block-check
 
 ## 設定
 
-| キー | 既定値 | 内容 |
-|---|---|---|
-| `users` | `[]` | 確認対象のユーザー名またはプロフィールURL |
-| `input` | なし | ユーザー一覧ファイル（設定ファイルからの相対パス可） |
-| `outputDir` | OSのユーザーデータ領域 | 結果保存先 |
-| `profileDir` | OSのユーザーデータ領域内 `profile` | 専用ブラウザプロファイル |
-| `browserExecutable` | 自動検出 | Chromium系ブラウザの実行ファイル |
-| `timeoutSeconds` | `20` | 1件あたりの待機上限（5〜120秒） |
-| `headless` | `true` | `check`でブラウザを非表示にする |
-| `relationshipMode` | `auto` | `auto`、`dom`、`passive`、`direct`から選ぶ判定方式 |
+| キー                | 既定値                             | 内容                                                 |
+| ------------------- | ---------------------------------- | ---------------------------------------------------- |
+| `users`             | `[]`                               | 確認対象のユーザー名またはプロフィールURL            |
+| `input`             | なし                               | ユーザー一覧ファイル（設定ファイルからの相対パス可） |
+| `outputDir`         | OSのユーザーデータ領域             | 結果保存先                                           |
+| `profileDir`        | OSのユーザーデータ領域内 `profile` | 専用ブラウザプロファイル                             |
+| `browserExecutable` | 自動検出                           | Chromium系ブラウザの実行ファイル                     |
+| `timeoutSeconds`    | `20`                               | 1件あたりの待機上限（5〜120秒）                      |
+| `headless`          | `true`                             | `check`でブラウザを非表示にする                      |
+| `relationshipMode`  | `auto`                             | `auto`、`dom`、`passive`、`direct`から選ぶ判定方式   |
 
 CLIオプションは設定ファイルより優先される
 全オプションは`x-block-checker --help`で確認できる
 
 ### 判定方式
 
-| モード | 動作 |
-|---|---|
-| `auto` | 内部GraphQLの直接取得を優先し、取得不能時は通常のプロフィール表示とDOM判定へフォールバック |
-| `dom` | プロフィール画面のDOMだけで判定 |
-| `passive` | 通常のプロフィール表示で発生した内部GraphQLレスポンスとDOMを使用 |
-| `direct` | 最初の通常表示で内部GraphQLリクエストを捕捉して以後は直接取得を優先し、取得不能時は`unknown` |
+| モード    | 動作                                                                                         |
+| --------- | -------------------------------------------------------------------------------------------- |
+| `auto`    | 内部GraphQLの直接取得を優先し、取得不能時は通常のプロフィール表示とDOM判定へフォールバック   |
+| `dom`     | プロフィール画面のDOMだけで判定                                                              |
+| `passive` | 通常のプロフィール表示で発生した内部GraphQLレスポンスとDOMを使用                             |
+| `direct`  | 最初の通常表示で内部GraphQLリクエストを捕捉して以後は直接取得を優先し、取得不能時は`unknown` |
 
 内部GraphQLのURL、query ID、feature flags、認証headerは設定や履歴へ保存しない
 実行中にブラウザの通常通信から捕捉し、メモリ内だけで再利用する

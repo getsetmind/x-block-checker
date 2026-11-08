@@ -3,7 +3,8 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { saveResults, withRunLock } from "../src/storage";
+import { saveBlockingList, saveResults, withRunLock } from "../src/storage";
+import type { BlockingList } from "../src/types";
 
 describe("storage", () => {
 	test("履歴をマージして最新結果とMarkdownを保存する", async () => {
@@ -24,6 +25,67 @@ describe("storage", () => {
 			expect(await readFile(join(dir, "blocked.md"), "utf8")).toContain(
 				"[@Foo](https://x.com/Foo)",
 			);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("ブロック一覧は全件置換され、checkの履歴と混在しない", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "xbc-storage-test-"));
+		const snapshot: BlockingList = {
+			version: 1,
+			checkedAt: "2026-08-15T00:00:00.000Z",
+			accounts: [
+				{ id: "1", username: "Foo", url: "https://x.com/Foo" },
+				{ id: "2", username: "Bar", url: "https://x.com/Bar" },
+			],
+		};
+		try {
+			await saveBlockingList(dir, snapshot);
+			expect(
+				JSON.parse(await readFile(join(dir, "blocking.json"), "utf8")),
+			).toEqual(snapshot);
+			expect(existsSync(join(dir, "latest.json"))).toBeFalse();
+			expect(existsSync(join(dir, "history.json"))).toBeFalse();
+			expect(existsSync(join(dir, "blocked.md"))).toBeFalse();
+			const replacement: BlockingList = {
+				...snapshot,
+				accounts: snapshot.accounts.slice(1),
+			};
+			await saveBlockingList(dir, replacement);
+			expect(
+				JSON.parse(await readFile(join(dir, "blocking.json"), "utf8")),
+			).toEqual(replacement);
+			const markdown = await readFile(join(dir, "blocking.md"), "utf8");
+			expect(markdown).toContain("[@Bar](https://x.com/Bar)");
+			expect(markdown).not.toContain("[@Foo]");
+			await saveResults(dir, [
+				{
+					username: "Incoming",
+					status: "blocked",
+					visibility: "public",
+					checkedAt: snapshot.checkedAt,
+					url: "https://x.com/Incoming",
+				},
+			]);
+			const latest = await readFile(join(dir, "latest.json"), "utf8");
+			const history = await readFile(join(dir, "history.json"), "utf8");
+			expect(latest).not.toContain("Bar");
+			expect(history).not.toContain("Bar");
+			expect(await readFile(join(dir, "blocking.md"), "utf8")).toBe(markdown);
+			expect(
+				JSON.parse(await readFile(join(dir, "blocking.json"), "utf8")),
+			).toEqual(replacement);
+			const empty: BlockingList = { ...snapshot, accounts: [] };
+			await saveBlockingList(dir, empty);
+			expect(
+				JSON.parse(await readFile(join(dir, "blocking.json"), "utf8")),
+			).toEqual(empty);
+			expect(await readFile(join(dir, "blocking.md"), "utf8")).not.toContain(
+				"[@",
+			);
+			expect(await readFile(join(dir, "latest.json"), "utf8")).toBe(latest);
+			expect(await readFile(join(dir, "history.json"), "utf8")).toBe(history);
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
@@ -50,8 +112,9 @@ describe("storage", () => {
 				!("results" in history) ||
 				typeof history.results !== "object" ||
 				history.results === null
-			)
+			) {
 				throw new Error("保存した履歴の形式が不正です");
+			}
 			const saved = Object.getOwnPropertyDescriptor(
 				history.results,
 				"__proto__",

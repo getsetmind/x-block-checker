@@ -13,7 +13,9 @@ export function isUsername(value: string): boolean {
 
 function normalizeUsername(value: string): string | null {
 	const trimmed = value.trim();
-	if (!trimmed) return null;
+	if (!trimmed) {
+		return null;
+	}
 
 	const urlMatch = trimmed.match(
 		/^https?:\/\/(?:www\.)?(?:x|twitter)\.com\/@?([A-Za-z0-9_]{1,15})(?:[/?#].*)?$/i,
@@ -27,20 +29,26 @@ function addUsername(
 	seen: Set<string>,
 	usernames: string[],
 ): void {
-	if (!token) return;
+	if (!token) {
+		return;
+	}
 	const username = normalizeUsername(token);
-	if (!username)
+	if (!username) {
 		throw new Error(
 			"ユーザー名は英数字とアンダースコアの1〜15文字、またはXのプロフィールURLで指定してください",
 		);
+	}
 
 	const key = username.toLowerCase();
-	if (seen.has(key)) return;
+	if (seen.has(key)) {
+		return;
+	}
 
 	seen.add(key);
 	usernames.push(username);
-	if (usernames.length > maxUsernames)
+	if (usernames.length > maxUsernames) {
 		throw new Error(`ユーザー名は最大${maxUsernames}件まで指定できます`);
+	}
 }
 
 /**
@@ -55,8 +63,9 @@ export function parseUsernames(values: readonly string[]): string[] {
 
 	for (const value of values) {
 		inputLength += value.length;
-		if (inputLength > maxInputLength)
+		if (inputLength > maxInputLength) {
 			throw new Error("ユーザー名入力が長すぎます");
+		}
 		for (const token of value.split(/[\s,]+/)) {
 			addUsername(token, seen, usernames);
 		}

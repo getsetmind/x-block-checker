@@ -18,5 +18,7 @@ const build = Bun.spawn(
 	{ stdout: "inherit", stderr: "inherit" },
 );
 const exitCode = await build.exited;
-if (exitCode !== 0) process.exit(exitCode);
+if (exitCode !== 0) {
+	process.exit(exitCode);
+}
 process.stdout.write(`実行ファイル: ${outputPath}\n`);

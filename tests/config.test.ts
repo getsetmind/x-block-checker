@@ -5,6 +5,33 @@ import { join } from "node:path";
 import { resolveConfig } from "../src/config/resolve";
 
 describe("resolveConfig", () => {
+	test("blockingは設定のユーザーと存在しないinputを無視する", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "xbc-config-test-"));
+		try {
+			const browserPath = join(dir, "browser.exe");
+			const configPath = join(dir, "config.json");
+			await writeFile(browserPath, "");
+			await writeFile(
+				configPath,
+				JSON.stringify({
+					users: ["not a username!"],
+					input: "missing-users.txt",
+					browserExecutable: browserPath,
+				}),
+			);
+			await expect(
+				resolveConfig({
+					command: "blocking",
+					configPath,
+					usernames: [],
+					json: false,
+				}),
+			).resolves.toMatchObject({ users: [], browserExecutable: browserPath });
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	test("設定ファイルを基準にパスとユーザーを解決する", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "xbc-config-test-"));
 		try {

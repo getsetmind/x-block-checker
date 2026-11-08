@@ -2,6 +2,24 @@ import { describe, expect, test } from "bun:test";
 import { parseArgs } from "../src/config/args";
 
 describe("parseArgs", () => {
+	test("blockingをJSON出力付きで解析する", () => {
+		expect(parseArgs(["blocking", "--json"])).toEqual({
+			command: "blocking",
+			configPath: "x-block-checker.config.json",
+			usernames: [],
+			json: true,
+		});
+	});
+
+	test.each([["@Foo"], ["--input", "users.txt"], ["-i", "users.txt"]])(
+		"blockingへの対象指定 %j を拒否する",
+		(...arguments_) => {
+			expect(() => parseArgs(["blocking", ...arguments_])).toThrow(
+				"blocking はユーザー引数と --input を指定できません",
+			);
+		},
+	);
+
 	test("doctorコマンドをJSON出力付きで解析する", () => {
 		expect(parseArgs(["doctor", "--json"])).toEqual({
 			command: "doctor",

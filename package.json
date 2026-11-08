@@ -17,17 +17,17 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"puppeteer-core": "25.9.0"
+		"puppeteer-core": "25.16.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.5.11",
-		"@types/bun": "^1.4.0",
-		"@types/node": "^26.4.0",
-		"@yuu1111/biome-config": "2.0.0",
-		"@yuu1111/knip-config": "1.0.7",
-		"@yuu1111/quality-check": "4.0.0",
-		"@yuu1111/tsconfig": "1.0.4",
-		"knip": "^6.35.1",
+		"@biomejs/biome": "2.6.6",
+		"@types/bun": "^1.4.4",
+		"@types/node": "^26.6.6",
+		"@yuu1111/biome-config": "2.2.6",
+		"@yuu1111/knip-config": "2.1.0",
+		"@yuu1111/quality-check": "7.0.2",
+		"@yuu1111/tsconfig": "1.0.8",
+		"knip": "^6.44.2",
 		"typescript": "^7.0.2"
 	}
 }

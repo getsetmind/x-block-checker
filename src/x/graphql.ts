@@ -37,7 +37,9 @@ export function isUserByScreenName(url: string): boolean {
 export function captureGraphqlTemplate(
 	request: HTTPRequest,
 ): GraphqlTemplate | null {
-	if (!isUserByScreenName(request.url())) return null;
+	if (!isUserByScreenName(request.url())) {
+		return null;
+	}
 	const postData = request.postData();
 	return {
 		url: request.url(),
@@ -60,13 +62,17 @@ export function captureGraphqlTemplate(
 }
 
 function replaceScreenName(value: unknown, username: string): boolean {
-	if (typeof value !== "object" || value === null) return false;
+	if (typeof value !== "object" || value === null) {
+		return false;
+	}
 	let replaced = false;
 	for (const [key, child] of Object.entries(value)) {
 		if (key.replaceAll("_", "").toLowerCase() === "screenname") {
 			Reflect.set(value, key, username);
 			replaced = true;
-		} else if (replaceScreenName(child, username)) replaced = true;
+		} else if (replaceScreenName(child, username)) {
+			replaced = true;
+		}
 	}
 	return replaced;
 }
@@ -100,7 +106,9 @@ export function createReplayRequest(
 			replaced = true;
 		}
 	}
-	if (!replaced) return null;
+	if (!replaced) {
+		return null;
+	}
 	return {
 		url: url.toString(),
 		method: template.method,

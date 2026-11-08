@@ -90,6 +90,24 @@ export interface CheckResult {
 }
 
 /**
+ * X設定のブロック一覧に含まれるアカウント
+ */
+export interface BlockingAccount {
+	id: string;
+	username: string;
+	url: string;
+}
+
+/**
+ * X設定から取得したブロック一覧のスナップショット
+ */
+export interface BlockingList {
+	version: 1;
+	checkedAt: string;
+	accounts: BlockingAccount[];
+}
+
+/**
  * ユーザー名単位で保持する判定履歴
  */
 export interface History {
