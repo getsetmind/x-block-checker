@@ -11,7 +11,7 @@
         "@biomejs/biome": "2.6.6",
         "@types/bun": "^1.4.4",
         "@types/node": "^26.6.6",
-        "@yuu1111/biome-config": "2.2.6",
+        "@yuu1111/biome-config": "2.2.7",
         "@yuu1111/knip-config": "2.1.0",
         "@yuu1111/quality-check": "7.0.2",
         "@yuu1111/tsconfig": "1.0.8",
@@ -177,7 +177,7 @@
 
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
 
-    "@yuu1111/biome-config": ["@yuu1111/biome-config@2.2.6", "", {}, "sha512-1mgzqDmEtDPDWA92hyjoxw2r3jsHzqSPmHq3mbCMbI1tpKn06fzNNhTP1VFHBw9XLNvBR96GXweuiHyBbpPVcw=="],
+    "@yuu1111/biome-config": ["@yuu1111/biome-config@2.2.7", "", {}, "sha512-5a671myxXsTP6XuDJ3Li+0iDQ9yo04US4Hi5XF0nQePVNWM+e+PTJWIgYH9hNtMfVFt5OUGb52U2C+9okoOR1Q=="],
 
     "@yuu1111/knip-config": ["@yuu1111/knip-config@2.1.0", "", { "peerDependencies": { "knip": ">=5.0.0" }, "optionalPeers": ["knip"] }, "sha512-i/mImQSWmkEvli5yYq1TY89KFqfQPtgvMfpQgshJDjcdf/f06GxENrXlS8+rM5u6hqG11bZabI0ec/HCCIZwtg=="],
 
