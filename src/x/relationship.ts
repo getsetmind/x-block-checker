@@ -64,6 +64,7 @@ function extractRelationship(record: JsonRecord): Relationship | undefined {
  * GraphQLレスポンスを再帰的に走査して関係を抽出する
  *
  * @param payload - 解析するJSON値
+ * @returns ユーザー名の大文字小文字を区別せず統合した関係の一覧
  */
 export function extractRelationships(payload: unknown): Relationship[] {
 	const relationships = new Map<string, Relationship>();

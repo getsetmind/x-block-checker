@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import type { AccountListKind } from "../src/account-lists/types";
 import { readBlockingList } from "../src/x/blocking";
+import { readFollowList } from "../src/x/follows";
 
 type BlockingPage = Parameters<typeof readBlockingList>[0];
 
@@ -61,8 +63,9 @@ function graphqlPage(
 	users: { id: string; username: string }[],
 	cursor?: string | string[],
 	terminated = false,
+	kind: AccountListKind = "blocking",
 ) {
-	return {
+	const payload = {
 		data: {
 			viewer: {
 				timeline: {
@@ -112,7 +115,173 @@ function graphqlPage(
 			},
 		},
 	};
+	if (kind === "blocking") {
+		return payload;
+	}
+	return { data: { user: { result: payload.data.viewer } } };
 }
+
+describe("readFollowList", () => {
+	test.each(["complete", "rateLimit"] as const)(
+		"%sの再開情報はユーザー名の再取得や通信なしで返す",
+		async (state) => {
+			const checkpoint = {
+				version: 1 as const,
+				checkedAt: "2026-01-01T00:00:00.000Z",
+				startedAt: "2026-01-01T00:00:00.000Z",
+				accounts: [{ id: "1", username: "Saved", url: "https://x.com/Saved" }],
+				source: "graphql" as const,
+				pages: 1,
+				nextCursor: state === "complete" ? null : "saved-cursor",
+				complete: state === "complete",
+				...(state === "rateLimit"
+					? {
+							retryAt: new Date(Date.now() + 60000).toISOString(),
+							stopReason: "rateLimit" as const,
+						}
+					: {}),
+			};
+			const result = await readFollowList(browserPage([]), 5000, {
+				kind: "followers",
+				ownerId: "111",
+				username: "",
+				checkpoint,
+			});
+			expect(result).toBe(checkpoint);
+		},
+	);
+	test.each(["following", "followers"] as const)(
+		"%sは本人の一覧だけを捕捉して保存位置から終端まで再開する",
+		async (kind) => {
+			const operation = kind === "following" ? "Following" : "Followers";
+			const endpointFor = (userId: string, name = operation) => {
+				const url = new URL(
+					`https://x.com/i/api/graphql/synthetic-query-id/${name}`,
+				);
+				url.searchParams.set(
+					"variables",
+					JSON.stringify({ userId, count: 20 }),
+				);
+				return url.toString();
+			};
+			const initial = graphqlPage(
+				[{ id: "1", username: "OldName" }],
+				"private-follow-cursor",
+				false,
+				kind,
+			);
+			const page = browserPage([
+				response(initial, endpointFor("999")),
+				response(initial, endpointFor("111", "BlockedAccountsAll")),
+				response(initial, endpointFor("111")),
+			]);
+			const navigated: string[] = [];
+			page.goto = async (url) => {
+				navigated.push(String(url));
+				return null;
+			};
+			const options = { kind, username: "Self", ownerId: "111", pageLimit: 1 };
+			const first = await readFollowList(page, 5000, options);
+			expect(navigated).toEqual([`https://x.com/Self/${kind}`]);
+			expect(first).toMatchObject({
+				source: "graphql",
+				pages: 1,
+				nextCursor: "private-follow-cursor",
+				complete: false,
+			});
+			const requests: URL[] = [];
+			fetchMock = spyOn(globalThis, "fetch").mockImplementation(
+				Object.assign(
+					async (input: Parameters<typeof fetch>[0]) => {
+						requests.push(new URL(String(input)));
+						return new Response(
+							JSON.stringify(
+								graphqlPage(
+									[
+										{ id: "1", username: "Renamed" },
+										{ id: "2", username: "Alpha" },
+									],
+									undefined,
+									true,
+									kind,
+								),
+							),
+						);
+					},
+					{ preconnect: fetch.preconnect },
+				),
+			);
+			const result = await readFollowList(page, 5000, {
+				...options,
+				checkpoint: first,
+			});
+			expect(result).toMatchObject({
+				complete: true,
+				pages: 2,
+				nextCursor: null,
+			});
+			expect(result.accounts.map((account) => account.username)).toEqual([
+				"Alpha",
+				"Renamed",
+			]);
+			expect(requests).toHaveLength(1);
+			expect(
+				JSON.parse(requests[0]?.searchParams.get("variables") ?? "{}"),
+			).toEqual({ userId: "111", count: 20, cursor: "private-follow-cursor" });
+		},
+	);
+
+	test.each(["following", "followers"] as const)(
+		"%sは別ユーザーの通信や壊れたタイムラインを成功にしない",
+		async (kind) => {
+			const operation = kind === "following" ? "Following" : "Followers";
+			const url = new URL(
+				`https://x.com/i/api/graphql/synthetic-query-id/${operation}`,
+			);
+			const options = { kind, username: "Self", ownerId: "111" };
+			const complete = graphqlPage([], undefined, true, kind);
+			const candidates = [
+				[url.toString(), { userId: "999" }],
+				[url.toString(), {}],
+				[url.toString(), { userId: 111 }],
+				[url.toString(), { userId: "111", cursor: "already-paged" }],
+				[url.toString().replace("x.com", "evil.example"), { userId: "111" }],
+				[url.toString().replace("https:", "http:"), { userId: "111" }],
+				[
+					url
+						.toString()
+						.replace(
+							operation,
+							kind === "following" ? "Followers" : "Following",
+						),
+					{ userId: "111" },
+				],
+				[endpoint, { userId: "111" }],
+			] as const;
+			for (const [endpoint, variables] of candidates) {
+				const candidate = new URL(endpoint);
+				candidate.searchParams.set("variables", JSON.stringify(variables));
+				await expect(
+					readFollowList(
+						browserPage([response(complete, candidate.toString())]),
+						5000,
+						options,
+					),
+				).rejects.toThrow("全件取得できません");
+			}
+			url.searchParams.set("variables", JSON.stringify({ userId: "111" }));
+			await expect(
+				readFollowList(
+					browserPage([
+						response(graphqlPage([], undefined, false, kind), url.toString()),
+					]),
+					5000,
+					options,
+				),
+			).rejects.toThrow("全件取得できません");
+		},
+	);
+});
 
 describe("readBlockingList", () => {
 	test("既定では25ページを保存して26ページ目の通信前に中断する", async () => {
@@ -544,7 +713,7 @@ describe("readBlockingList", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
-	test.each([401, 403, 500])(
+	test.each([401, 403, 404, 500])(
 		"途中のHTTP %iを成功扱いしない",
 		async (status) => {
 			fetchMock = spyOn(globalThis, "fetch").mockResolvedValue(

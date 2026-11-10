@@ -24,6 +24,7 @@ export interface ReplayRequest {
  * URLがユーザー情報を取得するGraphQLかを判定する
  *
  * @param url - 判定するURL
+ * @returns URLにGraphQLとUserByScreenNameの識別文字列が含まれればtrue
  */
 export function isUserByScreenName(url: string): boolean {
 	return url.includes("/graphql/") && url.includes("UserByScreenName");
@@ -33,6 +34,7 @@ export function isUserByScreenName(url: string): boolean {
  * 捕捉したリクエストから再送に必要な雛形を取り出す
  *
  * @param request - 捕捉したリクエスト
+ * @returns 対象リクエストの再送用雛形、対象外ならnull
  */
 export function captureGraphqlTemplate(
 	request: HTTPRequest,
@@ -82,6 +84,7 @@ function replaceScreenName(value: unknown, username: string): boolean {
  *
  * @param template - 再送に使う雛形
  * @param username - 差し替える対象ユーザー
+ * @returns 対象ユーザーへ差し替えたリクエスト、差し替え対象がなければnull
  */
 export function createReplayRequest(
 	template: GraphqlTemplate,

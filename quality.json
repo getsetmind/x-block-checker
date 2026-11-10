@@ -1,22 +1,27 @@
 {
 	"$schema": "./node_modules/@yuu1111/quality-check/schema.json",
+	"failOnWarnings": true,
 	"biome": true,
 	"typecheck": true,
 	"knip": true,
-	"code": true,
+	"code": {
+		"rules": {
+			"preset": "all"
+		}
+	},
 	"comment": {
 		"rules": {
-			"cramped-comment": "on",
-			"japanese-period": "on"
+			"preset": "all"
 		}
 	},
 	"markdown": {
 		"rules": {
-			"japanese-period": "on"
+			"preset": "all"
 		}
 	},
 	"tsdoc": {
 		"rules": {
+			"preset": "all",
 			"single-line-doc": "error",
 			"tsdoc-tag": "error",
 			"missing-doc": "error"

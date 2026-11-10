@@ -3,7 +3,7 @@
 x-block-checkerは、通常起動したChromiumで認証した専用プロファイルをPuppeteer Coreから使い、Xのブロック関係を定期確認するTypeScript CLI
 公式X APIやCookieの手動書き出しは使わず、プロフィール画面とブラウザが使用する`UserByScreenName`レスポンスを判定する
 
-# Commands
+## Commands
 
 ```bash
 bun install
@@ -18,7 +18,7 @@ bun run check:quality
 dist/x-block-checker.exe --help
 ```
 
-# Architecture
+## Architecture
 
 - `src/cli.ts`: コマンド、終了コード、出力
 - `src/types.ts`: 判定状態と共通の型定義
@@ -27,7 +27,7 @@ dist/x-block-checker.exe --help
 - `src/x/`: ブラウザ認証、プロフィール巡回、GraphQL捕捉、関係抽出、状態判定
 - `tests/`: ブラウザを使わない単体テスト
 
-# Conventions
+## Conventions
 
 - 品質検査は`quality.json`の方針に従い`bun run check:quality`で実行する
 - 整形と自動修正は`bun run format`でまとめて行う

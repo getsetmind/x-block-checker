@@ -3,12 +3,12 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { readBlockingCheckpoint } from "../src/storage";
+import { readAccountListCheckpoint } from "../src/account-lists/storage";
 
 test("ページ保存後の強制終了でも次プロセスが古いロックを回収して続きを完了する", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "xbc-interrupt-test-"));
 	try {
-		const browserModule = resolve("src/x/browser.ts");
+		const browserModule = resolve("src/x/account-list-browser.ts");
 		const cliPath = resolve("src/cli.ts");
 		const configPath = join(dir, "config.json");
 		const browserPath = join(dir, "browser.exe");
@@ -23,10 +23,7 @@ test("ページ保存後の強制終了でも次プロセスが古いロック�
 			String.raw`import { mock } from "bun:test";
 const interrupted = process.argv[2] === "interrupt";
 mock.module(${JSON.stringify(browserModule)}, () => ({
- authenticate: async () => { throw new Error("unused"); },
- checkUsers: async () => { throw new Error("unused"); },
- diagnose: async () => { throw new Error("unused"); },
- listBlocking: async (config, options) => {
+ collectAccountList: async (config, options) => {
   const first = { version: 1, ownerId: "1", checkedAt: "2026-08-15T00:00:00.000Z", startedAt: "2026-08-15T00:00:00.000Z", source: "graphql", pages: 1, nextCursor: "saved-private-cursor", complete: false, accounts: [{ id: "10", username: "Foo", url: "https://x.com/Foo" }] };
   if (interrupted) {
    await options.onProgress(first);
@@ -62,9 +59,9 @@ await import(${JSON.stringify(cliPath)});
 			}
 			reader.releaseLock();
 			expect(notification).toContain("checkpoint-saved");
-			expect((await readBlockingCheckpoint(dir))?.nextCursor).toBe(
-				"saved-private-cursor",
-			);
+			expect(
+				(await readAccountListCheckpoint(dir, "blocking"))?.nextCursor,
+			).toBe("saved-private-cursor");
 			expect(existsSync(join(dir, "run.lock"))).toBeTrue();
 			child.kill("SIGKILL");
 			await child.exited;

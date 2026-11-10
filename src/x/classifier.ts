@@ -31,6 +31,7 @@ function classifyRelationship(
  * @param state - プロフィール画面の状態
  * @param relationship - 抽出済みの関係
  * @param elapsedMs - 画面表示からの経過時間
+ * @returns 確定できた判定状態、または判定を継続する場合はnull
  */
 export function classify(
 	state: PageState,
@@ -74,6 +75,7 @@ export function classify(
  * @param state - プロフィール画面の状態
  * @param relationship - 抽出済みの関係
  * @param elapsedMs - 画面表示からの経過時間
+ * @returns 判定した公開範囲、または判定を継続する場合はnull
  */
 export function classifyVisibility(
 	state: PageState,

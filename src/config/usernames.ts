@@ -6,6 +6,7 @@ const usernamePattern = /^[A-Za-z0-9_]{1,15}$/;
  * Xのユーザー名として有効な形式かを判定する
  *
  * @param value - 検証する文字列
+ * @returns Xのユーザー名として有効な形式ならtrue、それ以外はfalse
  */
 export function isUsername(value: string): boolean {
 	return usernamePattern.test(value);
@@ -55,6 +56,7 @@ function addUsername(
  * 改行、空白、カンマ区切りの入力を重複のないユーザー名一覧へ変換する
  *
  * @param values - 区切りを含む入力の一覧
+ * @returns 大文字小文字を区別せず重複を除いた入力順のユーザー名一覧
  */
 export function parseUsernames(values: readonly string[]): string[] {
 	const usernames: string[] = [];

@@ -5,13 +5,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { appDataDir } from "../config/paths";
 import { hasErrorCode } from "../errors";
-import type {
-	BlockingCheckpoint,
-	CheckResult,
-	DoctorResult,
-	RuntimeConfig,
-} from "../types";
-import { readBlockingList } from "./blocking";
+import type { CheckResult, DoctorResult, RuntimeConfig } from "../types";
 import { createXChecker } from "./checker";
 
 interface LaunchedBrowser {
@@ -23,6 +17,7 @@ interface LaunchedBrowser {
  * OSごとにPuppeteerの既定引数から外す引数を返す
  *
  * @param platform - 判定するOS
+ * @returns macOSでは除外する既定引数の一覧、それ以外ではundefined
  */
 export function ignoredDefaultBrowserArgs(
 	platform: NodeJS.Platform = process.platform,
@@ -33,43 +28,16 @@ export function ignoredDefaultBrowserArgs(
 	return ["--use-mock-keychain"];
 }
 
-interface BlockingOptions {
-	checkpoint?: BlockingCheckpoint;
-	onProgress?: (progress: BlockingCheckpoint) => Promise<void>;
-	pageLimit?: number;
-}
-
-async function blockingOwnerId(browser: Browser): Promise<string> {
-	const cookies = await browser.defaultBrowserContext().cookies();
-	const ids = new Set(
-		cookies
-			.filter(
-				(cookie) =>
-					cookie.name === "twid" &&
-					cookie.domain.replace(/^\./, "").toLowerCase() === "x.com",
-			)
-			.map(
-				(cookie) =>
-					cookie.value.replace(/%3d/gi, "=").match(/^"?u=([1-9]\d*)"?$/)?.[1],
-			),
-	);
-	const [id] = ids;
-	if (ids.size === 1 && id) {
-		return id;
-	}
-	throw new Error(
-		"Xのログインアカウントを確認できません。authを再実行してください",
-	);
-}
-
 /**
+ * @typeParam T - 認証済みセッションでの処理結果
  * @param config - 解決済みの実行時設定
- * @param options - アカウントに紐付くチェックポイントと永続化処理
+ * @param action - 認証済みブラウザとページを利用する処理
+ * @returns 認証済みブラウザとページで実行したactionの戻り値
  */
-export async function listBlocking(
+export async function withAuthenticatedPage<T>(
 	config: RuntimeConfig,
-	options: BlockingOptions = {},
-): Promise<BlockingCheckpoint> {
+	action: (browser: Browser, page: Page) => Promise<T>,
+): Promise<T> {
 	const { browser, page } = await launchBrowser(config, config.headless);
 	try {
 		if (!(await hasAuthCookie(browser))) {
@@ -77,22 +45,7 @@ export async function listBlocking(
 				"Xへ未認証です。先に x-block-checker auth を実行してください",
 			);
 		}
-		const ownerId = await blockingOwnerId(browser);
-		if (options.checkpoint && options.checkpoint.ownerId !== ownerId) {
-			throw new Error(
-				"保存済みの進捗とログインアカウントが異なります。別の出力先を使うか --restart を指定してください",
-			);
-		}
-		const onProgress = async (
-			progress: Omit<BlockingCheckpoint, "ownerId">,
-		): Promise<void> => {
-			await options.onProgress?.({ ...progress, ownerId });
-		};
-		const result = await readBlockingList(page, config.timeoutMs, {
-			...options,
-			onProgress,
-		});
-		return { ...result, ownerId };
+		return await action(browser, page);
 	} finally {
 		await browser.close();
 	}
@@ -207,6 +160,7 @@ async function hasAuthCookie(browser: Browser): Promise<boolean> {
  * ブラウザの起動と認証Cookieを確認して実行可否を診断する
  *
  * @param config - 解決済みの実行時設定
+ * @returns 認証状態、実行可否、ブラウザとプロファイルの診断結果
  */
 export async function diagnose(config: RuntimeConfig): Promise<DoctorResult> {
 	const { browser } = await launchBrowser(config, true);
@@ -273,18 +227,13 @@ export async function authenticate(config: RuntimeConfig): Promise<void> {
  *
  * @param config - 解決済みの実行時設定
  * @param onProgress - 1件ごとの進捗通知
+ * @returns 設定済みユーザーの順序に対応する判定結果の一覧
  */
 export async function checkUsers(
 	config: RuntimeConfig,
 	onProgress?: ProgressCallback,
 ): Promise<CheckResult[]> {
-	const { browser, page } = await launchBrowser(config, config.headless);
-	try {
-		if (!(await hasAuthCookie(browser))) {
-			throw new Error(
-				"Xへ未認証です。先に x-block-checker auth を実行してください",
-			);
-		}
+	return withAuthenticatedPage(config, async (_browser, page) => {
 		const checkUser = createXChecker(page, config.relationshipMode);
 		const results: CheckResult[] = [];
 		for (const [index, username] of config.users.entries()) {
@@ -293,7 +242,5 @@ export async function checkUsers(
 			onProgress?.(index + 1, config.users.length, result);
 		}
 		return results;
-	} finally {
-		await browser.close();
-	}
+	});
 }

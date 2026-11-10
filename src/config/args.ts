@@ -1,3 +1,4 @@
+import type { AccountListKind } from "../account-lists/types";
 import { type RelationshipMode, relationshipModes } from "../types";
 
 /**
@@ -6,7 +7,7 @@ import { type RelationshipMode, relationshipModes } from "../types";
 export type Command =
 	| "auth"
 	| "check"
-	| "blocking"
+	| AccountListKind
 	| "doctor"
 	| "init"
 	| "help";
@@ -31,9 +32,20 @@ export interface CliOptions {
 	pageLimit?: number;
 }
 
+/**
+ * @param value - 判定するコマンド名
+ * @returns アカウント一覧取得コマンドならtrue、それ以外はfalse
+ */
+export function isAccountListCommand(
+	value: string | undefined,
+): value is AccountListKind {
+	return value === "blocking" || value === "following" || value === "followers";
+}
+
 function isCommand(value: string | undefined): value is Command {
-	return ["auth", "check", "blocking", "doctor", "init", "help"].includes(
-		value ?? "",
+	return (
+		isAccountListCommand(value) ||
+		["auth", "check", "doctor", "init", "help"].includes(value ?? "")
 	);
 }
 
@@ -74,21 +86,25 @@ function parseRelationshipMode(value: string): RelationshipMode {
 	);
 }
 
-function validateBlockingOptions(options: CliOptions): void {
+function validateAccountListOptions(options: CliOptions): void {
 	if (
-		options.command === "blocking" &&
+		isAccountListCommand(options.command) &&
 		(options.usernames.length > 0 || options.inputPath !== undefined)
 	) {
-		throw new Error("blocking はユーザー引数と --input を指定できません");
+		throw new Error(
+			`${options.command} はユーザー引数と --input を指定できません`,
+		);
 	}
 	if (
-		options.command !== "blocking" &&
+		!isAccountListCommand(options.command) &&
 		options.command !== "help" &&
 		(options.wait !== undefined ||
 			options.restart !== undefined ||
 			options.pageLimit !== undefined)
 	) {
-		throw new Error("--wait、--restart、--page-limit はblocking専用です");
+		throw new Error(
+			"--wait、--restart、--page-limit はblocking・following・followers専用です",
+		);
 	}
 }
 
@@ -96,6 +112,7 @@ function validateBlockingOptions(options: CliOptions): void {
  * コマンドライン引数を解析してオプションへ変換する
  *
  * @param argv - コマンド名より後ろの引数一覧
+ * @returns コマンドと既定値を含む解析済みのCLIオプション
  */
 export function parseArgs(argv: readonly string[]): CliOptions {
 	let command: Command = "check";
@@ -182,6 +199,6 @@ export function parseArgs(argv: readonly string[]): CliOptions {
 		}
 	}
 
-	validateBlockingOptions(options);
+	validateAccountListOptions(options);
 	return options;
 }

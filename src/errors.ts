@@ -3,6 +3,7 @@
  *
  * @param error - 判定する値
  * @param code - 比較するエラーコード
+ * @returns 値のcodeプロパティが指定コードと一致すればtrue、それ以外はfalse
  */
 export function hasErrorCode(error: unknown, code: string): boolean {
 	return (

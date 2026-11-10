@@ -12,7 +12,7 @@ test.each([
 	async ({ domain, message }) => {
 		const dir = await mkdtemp(join(tmpdir(), "xbc-owner-test-"));
 		try {
-			const browserPath = resolve("src/x/browser.ts");
+			const browserPath = resolve("src/x/account-list-browser.ts");
 			const puppeteerModule = import.meta.resolve("puppeteer-core");
 			const harness = join(dir, "owner-harness.ts");
 			await writeFile(
@@ -35,11 +35,11 @@ puppeteer.launch = async () => ({
   defaultBrowserContext: () => ({ cookies: async () => cookies }),
   close: async () => { closes++; },
  });
-const { listBlocking } = await import(${JSON.stringify(browserPath)});
+const { collectAccountList } = await import(${JSON.stringify(browserPath)});
 const config = { users: [], outputDir: ${JSON.stringify(dir)}, profileDir: ${JSON.stringify(join(dir, "profile"))}, browserExecutable: "unused", timeoutMs: 5000, headless: true, relationshipMode: "auto" };
 const checkpoint = { version: 1, checkedAt: "2026-08-15T00:00:00.000Z", startedAt: "2026-08-15T00:00:00.000Z", ownerId: "111", source: "graphql", pages: 1, complete: false, nextCursor: "private-cursor", accounts: [] };
 let message = "unexpected success";
-try { await listBlocking(config, { checkpoint }); }
+try { await collectAccountList(config, { checkpoint, kind: "blocking" }); }
 catch (error) { message = error instanceof Error ? error.message : "unknown"; }
 console.log(JSON.stringify({ message, networkCalls, closes }));
 `,

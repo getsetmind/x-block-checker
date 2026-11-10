@@ -2,26 +2,19 @@
 
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { runAccountListCommand } from "./account-lists/command";
 import { type CliOptions, parseArgs } from "./config/args";
 import { resolveConfig } from "./config/resolve";
 import { hasErrorCode } from "./errors";
+import { saveResults, withRunLock } from "./storage";
 import {
-	clearBlockingCheckpoint,
-	readBlockingCheckpoint,
-	saveBlockingCheckpoint,
-	saveBlockingList,
-	saveResults,
-	withRunLock,
-} from "./storage";
-import {
-	type BlockingCheckpoint,
 	type CheckResult,
 	type DoctorResult,
 	type RuntimeConfig,
 	statusLabels,
 	visibilityLabels,
 } from "./types";
-import { authenticate, checkUsers, diagnose, listBlocking } from "./x/browser";
+import { authenticate, checkUsers, diagnose } from "./x/browser";
 
 async function initialize(path: string): Promise<void> {
 	const absolutePath = resolve(path);
@@ -63,6 +56,8 @@ function printHelp(): void {
   x-block-checker doctor [--config <path>] [--json]
   x-block-checker check [@user ...] [options]
   x-block-checker blocking [options]
+  x-block-checker following [options]
+  x-block-checker followers [options]
 
 コマンド:
   init                    設定ファイルの雛形を作成
@@ -70,29 +65,32 @@ function printHelp(): void {
   doctor                  ブラウザと認証状態を診断
   check                   設定または引数のユーザーを確認
   blocking                X設定のブロックしているアカウント一覧を取得
+  following               自分がフォローしているアカウント一覧を取得
+  followers               自分のフォロワー一覧を取得
+  一覧取得コマンド共通:
                           users/input設定は無視し、ユーザー引数・--inputは不可
 
 オプション:
   -c, --config <path>     設定ファイル (既定: x-block-checker.config.json)
   -i, --input <path>      改行・空白・カンマ区切りのユーザー一覧
-      --output-dir <path> checkの結果・履歴、blockingの一覧の保存先
+      --output-dir <path> checkの結果・履歴、各一覧の保存先
       --profile-dir <path> ブラウザプロファイル保存先
       --browser <path>    Chrome、Brave、Edge、Chromiumの実行ファイル
       --timeout <秒>      1件あたりの待機上限 (5〜120)
       --relationship-mode <mode>
                           判定方式 (auto、dom、passive、direct)
-      --headed            check/blockingでもブラウザを表示
-      --headless          check/blockingをヘッドレス実行
-      --wait              blockingの制限解除・次バッチを待って継続
-      --page-limit <N>    blockingの1バッチのページ数 (1〜100、既定25)
-      --restart           blockingの再開情報を破棄して最初から取得
+      --headed            check/一覧取得でもブラウザを表示
+      --headless          check/一覧取得をヘッドレス実行
+      --wait              一覧取得の制限解除・次バッチを待って継続
+      --page-limit <N>    一覧取得の1バッチのページ数 (1〜100、既定25)
+      --restart           対象一覧の再開情報を破棄して最初から取得
       --json              結果をJSONで標準出力
   -h, --help              ヘルプを表示
 
 終了コード:
   0  全件を判定、または一覧取得完了
   1  設定・認証・ブラウザなどの実行エラー
-  2  判定不能のユーザーが存在、またはブロック一覧の取得途中
+  2  判定不能のユーザーが存在、または一覧の取得途中
 `);
 }
 
@@ -154,115 +152,6 @@ function printResults(
 	}
 }
 
-function printBlockingList(snapshot: BlockingCheckpoint, json: boolean): void {
-	if (json) {
-		const publicResult = snapshot.complete
-			? {
-					version: snapshot.version,
-					checkedAt: snapshot.checkedAt,
-					accounts: snapshot.accounts,
-				}
-			: {
-					version: snapshot.version,
-					checkedAt: snapshot.checkedAt,
-					accounts: snapshot.accounts,
-					complete: false,
-					source: snapshot.source,
-					pages: snapshot.pages,
-					startedAt: snapshot.startedAt,
-					...(snapshot.retryAt ? { retryAt: snapshot.retryAt } : {}),
-					...(snapshot.stopReason ? { stopReason: snapshot.stopReason } : {}),
-				};
-		process.stdout.write(`${JSON.stringify(publicResult, null, 2)}\n`);
-		return;
-	}
-	console.table(
-		snapshot.accounts.map((account) => ({
-			ユーザー: `@${account.username}`,
-			URL: account.url,
-		})),
-	);
-	process.stdout.write(
-		`ブロックしているアカウント: ${snapshot.accounts.length}件${snapshot.complete ? "" : "（取得途中）"}\n`,
-	);
-}
-
-async function waitUntil(instant: number): Promise<void> {
-	const remaining = instant - Date.now();
-	if (remaining <= 0) {
-		return;
-	}
-	process.stderr.write(
-		`次の取得まで待機します: ${new Date(instant).toISOString()}\n`,
-	);
-	await new Promise<void>((resolve) =>
-		setTimeout(resolve, Math.min(remaining, 2147483647)),
-	);
-	if (Date.now() < instant) {
-		await waitUntil(instant);
-	}
-}
-
-async function finishBlocking(
-	config: RuntimeConfig,
-	checkpoint: BlockingCheckpoint,
-): Promise<BlockingCheckpoint> {
-	await saveBlockingList(config.outputDir, checkpoint);
-	await clearBlockingCheckpoint(config.outputDir);
-	return checkpoint;
-}
-
-async function resumeBlockingBatch(
-	options: CliOptions,
-	config: RuntimeConfig,
-	checkpoint: BlockingCheckpoint | undefined,
-): Promise<BlockingCheckpoint> {
-	const retryAt = checkpoint?.retryAt ? Date.parse(checkpoint.retryAt) : 0;
-	if (retryAt > Date.now()) {
-		if (!options.wait && checkpoint) {
-			return checkpoint;
-		}
-		await waitUntil(retryAt);
-	}
-	return listBlocking(config, {
-		...(checkpoint ? { checkpoint } : {}),
-		pageLimit: options.pageLimit ?? 25,
-		onProgress: (progress) =>
-			saveBlockingCheckpoint(config.outputDir, progress),
-	});
-}
-
-function nextBlockingRun(checkpoint: BlockingCheckpoint): number {
-	if (checkpoint.stopReason === "rateLimit" && checkpoint.retryAt) {
-		return Date.parse(checkpoint.retryAt);
-	}
-	return Date.now() + 60000;
-}
-
-async function collectBlocking(
-	options: CliOptions,
-	config: RuntimeConfig,
-): Promise<BlockingCheckpoint> {
-	if (options.restart) {
-		await clearBlockingCheckpoint(config.outputDir);
-	}
-	let checkpoint = await readBlockingCheckpoint(config.outputDir);
-	if (checkpoint?.complete) {
-		return finishBlocking(config, await listBlocking(config, { checkpoint }));
-	}
-	while (true) {
-		checkpoint = await resumeBlockingBatch(options, config, checkpoint);
-		await saveBlockingCheckpoint(config.outputDir, checkpoint);
-		if (checkpoint.complete) {
-			return finishBlocking(config, checkpoint);
-		}
-		if (!options.wait) {
-			return checkpoint;
-		}
-		await waitUntil(nextBlockingRun(checkpoint));
-	}
-}
-
 async function main(): Promise<number> {
 	const options = parseArgs(process.argv.slice(2));
 	switch (options.command) {
@@ -284,16 +173,12 @@ async function main(): Promise<number> {
 			printDoctorResult(result, options.json);
 			return result.ready ? 0 : 1;
 		}
+		case "following":
+		case "followers":
 		case "blocking": {
+			const listOptions = { ...options, command: options.command };
 			const config = await resolveConfig(options);
-			const snapshot = await withRunLock(config.outputDir, () =>
-				collectBlocking(options, config),
-			);
-			printBlockingList(snapshot, options.json);
-			if (!options.json) {
-				process.stderr.write(`出力: ${config.outputDir}\n`);
-			}
-			return snapshot.complete ? 0 : 2;
+			return runAccountListCommand(listOptions, config);
 		}
 		case "check": {
 			const config = await resolveConfig(options);

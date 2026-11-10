@@ -3,7 +3,7 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { hasErrorCode } from "../errors";
 import type { ConfigFile, RuntimeConfig } from "../types";
 import { type RelationshipMode, relationshipModes } from "../types";
-import type { CliOptions } from "./args";
+import { type CliOptions, isAccountListCommand } from "./args";
 import { appDataDir, findBrowserExecutable } from "./paths";
 import { parseUsernames } from "./usernames";
 
@@ -102,7 +102,7 @@ async function resolveUsernames(
 	file: ConfigFile,
 	base: string,
 ): Promise<string[]> {
-	if (options.command === "blocking") {
+	if (isAccountListCommand(options.command)) {
 		return [];
 	}
 	const values = [...(file.users ?? []), ...options.usernames];
@@ -117,6 +117,7 @@ async function resolveUsernames(
  * CLI引数と設定ファイルを統合し、既定値を解決する
  *
  * @param options - 解析済みのCLI引数
+ * @returns 対象ユーザー、解決済みパス、判定方式を含む実行時設定
  */
 export async function resolveConfig(
 	options: CliOptions,

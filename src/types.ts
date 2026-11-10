@@ -90,44 +90,6 @@ export interface CheckResult {
 }
 
 /**
- * X設定のブロック一覧に含まれるアカウント
- */
-export interface BlockingAccount {
-	id: string;
-	username: string;
-	url: string;
-}
-
-/**
- * X設定から取得したブロック一覧のスナップショット
- */
-export interface BlockingList {
-	version: 1;
-	checkedAt: string;
-	accounts: BlockingAccount[];
-}
-
-/**
- * ブロック一覧の取得進捗
- */
-export interface BlockingCollection extends BlockingList {
-	source: "graphql" | "rest";
-	nextCursor: string | null;
-	pages: number;
-	startedAt: string;
-	complete: boolean;
-	retryAt?: string;
-	stopReason?: "rateLimit" | "pageLimit";
-}
-
-/**
- * アカウントに結び付けたブロック一覧の再開情報
- */
-export interface BlockingCheckpoint extends BlockingCollection {
-	ownerId: string;
-}
-
-/**
  * ユーザー名単位で保持する判定履歴
  */
 export interface History {

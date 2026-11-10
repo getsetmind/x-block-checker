@@ -52,6 +52,7 @@ function macBrowserCandidates(home: string): string[] {
  * @param platform - 判定するOS
  * @param home - ホームディレクトリ
  * @param environment - 参照する環境変数
+ * @returns 探索順に並んだブラウザ実行ファイルの候補パス
  */
 export function browserExecutableCandidates(
 	platform: NodeJS.Platform = process.platform,
@@ -76,6 +77,8 @@ export function browserExecutableCandidates(
 
 /**
  * OSごとのユーザーデータ領域にあるアプリ専用ディレクトリを返す
+ *
+ * @returns 現在のOSのユーザーデータ領域にあるアプリ専用パス
  */
 export function appDataDir(): string {
 	let dataRoot: string;
@@ -98,6 +101,7 @@ export function appDataDir(): string {
  * 指定または自動検出したブラウザの実行ファイルを返す
  *
  * @param explicitPath - 明示された実行ファイル
+ * @returns 存在を確認した指定パス、または最初に見つかった候補パス
  */
 export function findBrowserExecutable(explicitPath?: string): string {
 	if (explicitPath) {

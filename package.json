@@ -10,6 +10,7 @@
 		"check:quality": "quality-check",
 		"cli": "bun src/cli.ts",
 		"compile": "bun scripts/compile.ts",
+		"diagnose:followers": "bun scripts/diagnose-followers.ts",
 		"format": "biome check --write --unsafe .",
 		"install-local": "bun run compile && bun scripts/install-local.ts",
 		"lint": "biome check --error-on-warnings .",

@@ -3,14 +3,14 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { saveBlockingCheckpoint } from "../src/storage";
-import type { BlockingCheckpoint } from "../src/types";
+import { saveAccountListCheckpoint } from "../src/account-lists/storage";
+import type { AccountListCheckpoint } from "../src/account-lists/types";
 
 test("--waitは期限を守り同じ再開位置を保って制限解除後に完了する", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "xbc-wait-test-"));
 	try {
 		const start = Date.parse("2026-08-15T00:00:00.000Z");
-		const initial: BlockingCheckpoint = {
+		const initial: AccountListCheckpoint = {
 			version: 1,
 			checkedAt: new Date(start).toISOString(),
 			startedAt: new Date(start).toISOString(),
@@ -23,7 +23,7 @@ test("--waitは期限を守り同じ再開位置を保って制限解除後に�
 			retryAt: new Date(start + 120000).toISOString(),
 			accounts: [{ id: "10", username: "Foo", url: "https://x.com/Foo" }],
 		};
-		await saveBlockingCheckpoint(dir, initial);
+		await saveAccountListCheckpoint(dir, initial, "blocking");
 		const configPath = join(dir, "config.json");
 		const browserPath = join(dir, "browser.exe");
 		await writeFile(browserPath, "");
@@ -34,7 +34,7 @@ test("--waitは期限を守り同じ再開位置を保って制限解除後に�
 		const harness = join(dir, "wait-harness.ts");
 		const report = join(dir, "report.json");
 		const cliPath = resolve("src/cli.ts");
-		const browserModule = resolve("src/x/browser.ts");
+		const browserModule = resolve("src/x/account-list-browser.ts");
 		await writeFile(
 			harness,
 			`import { mock } from "bun:test";
@@ -53,10 +53,7 @@ globalThis.setTimeout = Object.assign((callback, delay = 0) => {
  return realTimer(() => {}, 0);
 }, realTimer);
 mock.module(${JSON.stringify(browserModule)}, () => ({
- authenticate: async () => { throw new Error("unused"); },
- checkUsers: async () => { throw new Error("unused"); },
- diagnose: async () => { throw new Error("unused"); },
- listBlocking: async (config, options) => {
+ collectAccountList: async (config, options) => {
   const checkpoint = options.checkpoint;
   const saved = JSON.parse(await readFile(join(config.outputDir, "blocking-progress.json"), "utf8"));
   if (!checkpoint || saved.nextCursor !== checkpoint.nextCursor || saved.pages !== checkpoint.pages) throw new Error("saved cursor was not resumed");

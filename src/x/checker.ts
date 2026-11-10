@@ -214,6 +214,7 @@ async function checkUser(
  *
  * @param page - 操作するページ
  * @param mode - 判定方式
+ * @returns 指定ページと判定方式で1ユーザーを確認する関数
  */
 export function createXChecker(page: Page, mode: RelationshipMode): CheckUser {
 	const state: CheckerState = {
