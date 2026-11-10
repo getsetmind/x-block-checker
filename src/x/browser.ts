@@ -145,8 +145,13 @@ async function launchBrowser(
 		...(ignoreDefaultArgs ? { ignoreDefaultArgs } : {}),
 		args: ["--no-first-run", "--no-default-browser-check"],
 	});
-	const pages = await browser.pages();
-	return { browser, page: pages[0] ?? (await browser.newPage()) };
+	try {
+		const pages = await browser.pages();
+		return { browser, page: pages[0] ?? (await browser.newPage()) };
+	} catch (error) {
+		await browser.close();
+		throw error;
+	}
 }
 
 async function hasAuthCookie(browser: Browser): Promise<boolean> {

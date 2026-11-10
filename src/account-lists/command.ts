@@ -1,5 +1,5 @@
 import type { CliOptions } from "../config/args";
-import { withRunLock } from "../storage";
+import { withRunLock } from "../run-lock";
 import type { RuntimeConfig } from "../types";
 import { collectAccountList } from "../x/account-list-browser";
 import {

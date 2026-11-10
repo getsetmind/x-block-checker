@@ -34,25 +34,39 @@ url.searchParams.set("variables", JSON.stringify({ userId: "111", count: 20 }));
 const user = (id, username) => ({ content: { entryType: "TimelineTimelineItem", itemContent: { itemType: "TimelineUser", user_results: { result: { __typename: "User", rest_id: id, core: { screen_name: username } } } } } });
 const payload = (last) => ({ data: { user: { result: { timeline: { timeline: { instructions: [{ type: "TimelineAddEntries", entries: [user(last ? "2" : "1", last ? "Alpha" : "Zulu"), ...(!last ? [{ content: { entryType: "TimelineTimelineCursor", cursorType: "Bottom", value: "private-next" } }] : [])] }, ...(last ? [{ type: "TimelineTerminateTimeline", direction: "Bottom" }] : [])] } } } } } });
 let current = "";
+let intercepting = false;
+const listeners = new Set();
+const waiters = [];
 const page = {
- goto: async (target) => { current = target; return null; },
+ goto: async (target) => {
+  current = target;
+  if (target !== "https://x.com/Self/" + kind) return null;
+  let effectiveUrl = url.toString();
+  let handled = false;
+  const request = {
+   url: () => url.toString(), method: () => "GET", headers: () => ({ authorization: "synthetic-secret" }),
+   isInterceptResolutionHandled: () => handled,
+   continue: async (overrides = {}) => { handled = true; effectiveUrl = overrides.url ?? effectiveUrl; },
+   abort: async () => { handled = true; },
+  };
+  if (intercepting) { for (const listener of listeners) await listener(request); }
+  await Promise.resolve();
+  const variables = JSON.parse(new URL(effectiveUrl).searchParams.get("variables"));
+  if (variables.userId !== "111" || (variables.cursor !== undefined && variables.cursor !== "private-next")) throw new Error("wrong resume");
+  const response = { url: () => url.toString(), status: () => 200, headers: () => ({}), json: async () => payload(variables.cursor === "private-next"), request: () => request };
+  for (const waiter of [...waiters]) { if (waiter.predicate(response)) { waiters.splice(waiters.indexOf(waiter), 1); waiter.resolve(response); } }
+  return null;
+ },
  url: () => current,
  waitForSelector: async () => ({}),
  $eval: async () => "/Self",
- waitForResponse: async (predicate) => {
-  await Promise.resolve();
-  const response = { url: () => url.toString(), status: () => 200, headers: () => ({}), json: async () => payload(false), request: () => ({ method: () => "GET", headers: () => ({ authorization: "synthetic-secret" }) }) };
-  if (!predicate(response) || current !== "https://x.com/Self/" + kind) throw new Error("wrong list route");
-  return response;
- },
- evaluate: async (fn, input) => fn(input),
+ waitForResponse: (predicate) => new Promise(resolve => { waiters.push({ predicate, resolve }); }),
+ setRequestInterception: async (enabled) => { intercepting = enabled; },
+ on: (_event, listener) => { listeners.add(listener); return page; },
+ off: (_event, listener) => { listeners.delete(listener); return page; },
+ evaluate: async () => { throw new Error("direct replay forbidden"); },
 };
-globalThis.fetch = async (input) => {
- const parsed = new URL(input);
- const variables = JSON.parse(parsed.searchParams.get("variables"));
- if (variables.userId !== "111" || variables.cursor !== "private-next" || !parsed.pathname.endsWith("/" + operation)) throw new Error("wrong resume");
- return new Response(JSON.stringify(payload(true)));
-};
+globalThis.fetch = async () => { throw new Error("direct replay forbidden"); };
 puppeteer.launch = async () => ({ pages: async () => [page], defaultBrowserContext: () => ({ cookies: async () => [{ name: "auth_token", value: "synthetic-auth", domain: ".x.com" }, { name: "twid", value: "u%3D111", domain: ".x.com" }] }), close: async () => {} });
 process.argv = [process.execPath, ${JSON.stringify(resolve("src/cli.ts"))}, kind, "--json", "--page-limit", "1", "--config", ${JSON.stringify(config)}];
 await import(${JSON.stringify(resolve("src/cli.ts"))});

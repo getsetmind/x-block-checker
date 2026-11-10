@@ -3,6 +3,10 @@ import type { AccountListKind } from "../src/account-lists/types";
 import { readBlockingList } from "../src/x/blocking";
 import { readFollowList } from "../src/x/follows";
 
+type FollowPage = Parameters<typeof readFollowList>[0];
+
+type NativeRequest = Parameters<Parameters<FollowPage["on"]>[1]>[0];
+
 type BlockingPage = Parameters<typeof readBlockingList>[0];
 
 type BlockingResponse = Awaited<ReturnType<BlockingPage["waitForResponse"]>>;
@@ -51,6 +55,87 @@ function browserPage(
 		goto: async () => null,
 		url: () => currentUrl,
 		evaluate: async (fn, input) => fn(input),
+	};
+}
+
+function followBrowserPage(
+	responses: BlockingResponse[],
+	nativePayload?: (url: URL) => unknown,
+	nativeStatus = 200,
+	nativeHeaders: Record<string, string> = {},
+): FollowPage {
+	const base = browserPage(responses);
+	let intercepting = false;
+	const listeners = new Set<(request: NativeRequest) => void>();
+	let waiting:
+		| {
+				predicate: (response: BlockingResponse) => boolean;
+				resolve: (response: BlockingResponse) => void;
+		  }
+		| undefined;
+	return {
+		...base,
+		evaluate: async () => {
+			throw new Error("follow pagination must not replay fetch");
+		},
+		setRequestInterception: async (enabled) => {
+			intercepting = enabled;
+		},
+		on: (_event, listener) => {
+			listeners.add(listener);
+		},
+		off: (_event, listener) => {
+			listeners.delete(listener);
+		},
+		waitForResponse: async (predicate, options) => {
+			if (!intercepting) {
+				return base.waitForResponse(predicate, options);
+			}
+			return new Promise((resolve, reject) => {
+				waiting = { predicate, resolve };
+				options.signal?.addEventListener(
+					"abort",
+					() => reject(new Error("aborted")),
+					{ once: true },
+				);
+			});
+		},
+		goto: async () => {
+			if (!intercepting) {
+				return null;
+			}
+			for (const original of responses) {
+				let handled = false;
+				const request: NativeRequest = {
+					url: () => original.url(),
+					method: () => original.request().method(),
+					headers: () => original.request().headers(),
+					isInterceptResolutionHandled: () => handled,
+					continue: async (overrides) => {
+						handled = true;
+						const effective = new URL(overrides?.url ?? original.url());
+						const captured: BlockingResponse = {
+							...original,
+							request: () => request,
+							status: () => (overrides?.url ? nativeStatus : original.status()),
+							headers: () =>
+								overrides?.url ? nativeHeaders : original.headers(),
+							json: async () =>
+								overrides?.url && nativePayload
+									? nativePayload(effective)
+									: original.json(),
+						};
+						if (waiting?.predicate(captured)) {
+							waiting.resolve(captured);
+						}
+					},
+				};
+				for (const listener of listeners) {
+					listener(request);
+				}
+			}
+			return null;
+		},
 	};
 }
 
@@ -122,6 +207,56 @@ function graphqlPage(
 }
 
 describe("readFollowList", () => {
+	test.each([429, 404])(
+		"native HTTP%i preserves saved page and never parses failed response",
+		async (status) => {
+			const url =
+				"https://x.com/i/api/graphql/fresh/Followers?variables=%7B%22userId%22%3A%22111%22%7D";
+			const page = followBrowserPage(
+				[
+					response(
+						graphqlPage(
+							[{ id: "1", username: "Saved" }],
+							"private-cursor",
+							false,
+							"followers",
+						),
+						url,
+					),
+				],
+				() => {
+					throw new Error("error body must not be parsed");
+				},
+				status,
+				{ "retry-after": "60" },
+			);
+			const saved: number[] = [];
+			const result = readFollowList(page, 5000, {
+				kind: "followers",
+				ownerId: "111",
+				username: "Self",
+				onProgress: async (progress) => {
+					saved.push(progress.pages);
+				},
+			});
+			if (status === 429) {
+				await expect(result).resolves.toMatchObject({
+					pages: 1,
+					accounts: [
+						{ id: "1", username: "Saved", url: "https://x.com/Saved" },
+					],
+					nextCursor: "private-cursor",
+					stopReason: "rateLimit",
+					complete: false,
+				});
+				expect(saved).toEqual([1, 1]);
+			} else {
+				await expect(result).rejects.toThrow("HTTP 404");
+				expect(saved).toEqual([1]);
+			}
+		},
+	);
+
 	test.each(["complete", "rateLimit"] as const)(
 		"%sの再開情報はユーザー名の再取得や通信なしで返す",
 		async (state) => {
@@ -141,7 +276,7 @@ describe("readFollowList", () => {
 						}
 					: {}),
 			};
-			const result = await readFollowList(browserPage([]), 5000, {
+			const result = await readFollowList(followBrowserPage([]), 5000, {
 				kind: "followers",
 				ownerId: "111",
 				username: "",
@@ -170,7 +305,7 @@ describe("readFollowList", () => {
 				false,
 				kind,
 			);
-			const page = browserPage([
+			const page = followBrowserPage([
 				response(initial, endpointFor("999")),
 				response(initial, endpointFor("111", "BlockedAccountsAll")),
 				response(initial, endpointFor("111")),
@@ -190,28 +325,22 @@ describe("readFollowList", () => {
 				complete: false,
 			});
 			const requests: URL[] = [];
-			fetchMock = spyOn(globalThis, "fetch").mockImplementation(
-				Object.assign(
-					async (input: Parameters<typeof fetch>[0]) => {
-						requests.push(new URL(String(input)));
-						return new Response(
-							JSON.stringify(
-								graphqlPage(
-									[
-										{ id: "1", username: "Renamed" },
-										{ id: "2", username: "Alpha" },
-									],
-									undefined,
-									true,
-									kind,
-								),
-							),
-						);
-					},
-					{ preconnect: fetch.preconnect },
-				),
+			const resumedPage = followBrowserPage(
+				[response(initial, endpointFor("111"))],
+				(url) => {
+					requests.push(url);
+					return graphqlPage(
+						[
+							{ id: "1", username: "Renamed" },
+							{ id: "2", username: "Alpha" },
+						],
+						undefined,
+						true,
+						kind,
+					);
+				},
 			);
-			const result = await readFollowList(page, 5000, {
+			const result = await readFollowList(resumedPage, 5000, {
 				...options,
 				checkpoint: first,
 			});
@@ -263,7 +392,7 @@ describe("readFollowList", () => {
 				candidate.searchParams.set("variables", JSON.stringify(variables));
 				await expect(
 					readFollowList(
-						browserPage([response(complete, candidate.toString())]),
+						followBrowserPage([response(complete, candidate.toString())]),
 						5000,
 						options,
 					),
@@ -272,7 +401,7 @@ describe("readFollowList", () => {
 			url.searchParams.set("variables", JSON.stringify({ userId: "111" }));
 			await expect(
 				readFollowList(
-					browserPage([
+					followBrowserPage([
 						response(graphqlPage([], undefined, false, kind), url.toString()),
 					]),
 					5000,
@@ -443,6 +572,31 @@ describe("readBlockingList", () => {
 		expect(blocked).toEqual(result);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		expect(JSON.stringify(result)).not.toContain(secret);
+	});
+
+	test("429の中断保存に失敗しても例外の秘密値やcauseを公開しない", async () => {
+		const interrupted: string[] = [];
+		const result = readBlockingList(
+			browserPage([response({}, endpoint, 429, { "retry-after": "60" })]),
+			5000,
+			{
+				onProgress: async (progress) => {
+					interrupted.push(progress.stopReason ?? "");
+					throw new Error(secret, { cause: new Error(secret) });
+				},
+			},
+		);
+		await expect(result).rejects.toThrow("全件取得できません");
+		await result.catch((error: unknown) => {
+			expect(error).toBeInstanceOf(Error);
+			if (!(error instanceof Error)) {
+				throw error;
+			}
+			expect(error.message).not.toContain(secret);
+			expect(error.stack).not.toContain(secret);
+			expect(error.cause).toBeUndefined();
+		});
+		expect(interrupted).toEqual(["rateLimit"]);
 	});
 
 	test("初回429でも再実行可能な空の進捗と待機期限を返す", async () => {

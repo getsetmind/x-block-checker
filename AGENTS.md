@@ -22,9 +22,15 @@ dist/x-block-checker.exe --help
 
 - `src/cli.ts`: コマンド、終了コード、出力
 - `src/types.ts`: 判定状態と共通の型定義
-- `src/storage.ts`: ロック、履歴、Markdownの原子的保存
+- `src/storage.ts`: ブロック判定履歴の保存
+- `src/run-lock.ts`: 共通の実行ロック管理
+- `src/persistence.ts`: JSON整形と原子的なファイル保存
+- `src/account-lists/`: 一覧の中立的な型定義、保存、待機・再開・CLI出力
 - `src/config/`: CLI引数、設定解決、ユーザー名の検証、OS別パス探索
 - `src/x/`: ブラウザ認証、プロフィール巡回、GraphQL捕捉、関係抽出、状態判定
+- `src/x/account-list.ts`: 一覧種別を知らない取得エンジン
+- `src/x/blocking.ts`・`src/x/follows.ts`: 一覧種別ごとの通信・応答解析アダプター
+- `src/x/account-list-browser.ts`: 認証済みブラウザと一覧アダプターの接続
 - `tests/`: ブラウザを使わない単体テスト
 
 ## Conventions

@@ -6,7 +6,8 @@ import { runAccountListCommand } from "./account-lists/command";
 import { type CliOptions, parseArgs } from "./config/args";
 import { resolveConfig } from "./config/resolve";
 import { hasErrorCode } from "./errors";
-import { saveResults, withRunLock } from "./storage";
+import { withRunLock } from "./run-lock";
+import { saveResults } from "./storage";
 import {
 	type CheckResult,
 	type DoctorResult,

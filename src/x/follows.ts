@@ -3,11 +3,12 @@ import type {
 	AccountListKind,
 } from "../account-lists/types";
 import { isUsername } from "../config/usernames";
+import { type AccountListAdapter, readAccountList } from "./account-list";
 import {
-	type AccountListAdapter,
-	type AccountListPage,
-	readAccountList,
-} from "./account-list";
+	loadNativeAccountListPage,
+	type NativeAccountListPage,
+	type NativeAccountListRequest,
+} from "./account-list-native";
 import { readAccountListTimeline } from "./account-list-timeline";
 
 interface FollowReadOptions {
@@ -30,37 +31,64 @@ function record(value: unknown): Record<string, unknown> {
 	return value;
 }
 
-function followAdapter(options: FollowReadOptions): AccountListAdapter {
+function followAdapter(
+	page: NativeAccountListPage,
+	options: FollowReadOptions,
+): AccountListAdapter {
 	if (!isUsername(options.username) || !/^[1-9]\d*$/.test(options.ownerId)) {
 		throw new Error("一覧の取得対象を確認できません");
 	}
 	const operation = options.kind === "following" ? "Following" : "Followers";
+	const pageUrl = `https://x.com/${options.username}/${options.kind}`;
+	const matchesRequest = (
+		request: Pick<NativeAccountListRequest, "url" | "method">,
+	): boolean => {
+		const url = new URL(request.url());
+		if (
+			url.protocol !== "https:" ||
+			!["x.com", "api.x.com", "twitter.com", "api.twitter.com"].includes(
+				url.hostname,
+			) ||
+			request.method() !== "GET" ||
+			!url.pathname.includes("/graphql/") ||
+			!url.pathname.endsWith(`/${operation}`)
+		) {
+			return false;
+		}
+		try {
+			const variables = record(
+				JSON.parse(url.searchParams.get("variables") ?? "{}"),
+			);
+			return (
+				variables.cursor === undefined && variables.userId === options.ownerId
+			);
+		} catch {
+			return false;
+		}
+	};
+	const advanceCursor = (url: URL, cursor: string): void => {
+		const variables = record(
+			JSON.parse(url.searchParams.get("variables") ?? "{}"),
+		);
+		variables.cursor = cursor;
+		url.searchParams.set("variables", JSON.stringify(variables));
+	};
 	return {
-		pageUrl: `https://x.com/${options.username}/${options.kind}`,
-		matchesResponse(response) {
-			const url = new URL(response.url());
-			if (
-				url.protocol !== "https:" ||
-				!["x.com", "api.x.com", "twitter.com", "api.twitter.com"].includes(
-					url.hostname,
-				) ||
-				response.request().method() !== "GET" ||
-				!url.pathname.includes("/graphql/") ||
-				!url.pathname.endsWith(`/${operation}`)
-			) {
-				return false;
-			}
-			try {
-				const variables = record(
-					JSON.parse(url.searchParams.get("variables") ?? "{}"),
-				);
-				return (
-					variables.cursor === undefined && variables.userId === options.ownerId
-				);
-			} catch {
-				return false;
-			}
-		},
+		pageUrl,
+		matchesResponse: (response) =>
+			matchesRequest({
+				url: () => response.url(),
+				method: () => response.request().method(),
+			}),
+		loadPage: (cursor, timeoutMs) =>
+			loadNativeAccountListPage(
+				page,
+				pageUrl,
+				cursor,
+				timeoutMs,
+				matchesRequest,
+				advanceCursor,
+			),
 		source: () => "graphql",
 		readPage(payload) {
 			const root = record(payload);
@@ -72,13 +100,7 @@ function followAdapter(options: FollowReadOptions): AccountListAdapter {
 				record(record(result.timeline).timeline).instructions,
 			);
 		},
-		advanceCursor(url, _source, cursor) {
-			const variables = record(
-				JSON.parse(url.searchParams.get("variables") ?? "{}"),
-			);
-			variables.cursor = cursor;
-			url.searchParams.set("variables", JSON.stringify(variables));
-		},
+		advanceCursor: (url, _source, cursor) => advanceCursor(url, cursor),
 	};
 }
 
@@ -89,7 +111,7 @@ function followAdapter(options: FollowReadOptions): AccountListAdapter {
  * @returns 指定した一覧の取得結果と再開可能な進捗
  */
 export async function readFollowList(
-	page: AccountListPage,
+	page: NativeAccountListPage,
 	timeoutMs: number,
 	options: FollowReadOptions,
 ): Promise<AccountListCollection> {
@@ -102,6 +124,6 @@ export async function readFollowList(
 	}
 	return readAccountList(page, timeoutMs, {
 		...options,
-		adapter: followAdapter(options),
+		adapter: followAdapter(page, options),
 	});
 }

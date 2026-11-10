@@ -23,7 +23,7 @@ type FetchInput = {
 export type AccountListPage = Pick<Page, "goto" | "url"> & {
 	waitForResponse(
 		predicate: (response: AccountListResponse) => boolean,
-		options: { timeout: number },
+		options: { timeout: number; signal?: AbortSignal },
 	): Promise<AccountListResponse>;
 	evaluate<T>(
 		fn: (input: FetchInput) => Promise<T>,
@@ -42,6 +42,10 @@ export interface AccountListAdapter {
 		payload: unknown,
 		source: AccountListCollection["source"],
 	): { accounts: Account[]; nextCursor: string | null };
+	loadPage?(
+		cursor: string,
+		timeoutMs: number,
+	): Promise<Pick<AccountListResponse, "status" | "headers" | "json">>;
 	advanceCursor(
 		url: URL,
 		source: AccountListCollection["source"],
@@ -249,8 +253,14 @@ async function collectAccountListPages(
 		if (progress.nextCursor === null) {
 			throw new Error("アカウント一覧の再開位置が不正です");
 		}
-		options.adapter.advanceCursor(url, progress.source, progress.nextCursor);
-		payload = await fetchNextPage(page, url.toString(), headers, timeoutMs);
+		payload = await loadPage(
+			page,
+			url,
+			headers,
+			timeoutMs,
+			progress,
+			options.adapter,
+		);
 	}
 	throw new Error("アカウント一覧のページ数設定が不正です");
 }
@@ -269,12 +279,41 @@ async function startingPayload(
 	if (!progress.nextCursor) {
 		throw new Error("アカウント一覧の再開位置が不正です");
 	}
-	adapter.advanceCursor(url, progress.source, progress.nextCursor);
-	return fetchNextPage(
+	return loadPage(
 		page,
-		url.toString(),
+		url,
 		replayHeaders(response.request().headers()),
 		timeoutMs,
+		progress,
+		adapter,
+	);
+}
+
+async function loadPage(
+	page: AccountListPage,
+	url: URL,
+	headers: Record<string, string>,
+	timeoutMs: number,
+	progress: AccountListCollection,
+	adapter: AccountListAdapter,
+): Promise<unknown> {
+	if (!progress.nextCursor) {
+		throw new Error("アカウント一覧の再開位置が不正です");
+	}
+	if (adapter.loadPage) {
+		const response = await adapter.loadPage(progress.nextCursor, timeoutMs);
+		if (response.status() !== 200) {
+			throw new AccountListHttpError(response.status(), response.headers());
+		}
+		return response.json();
+	}
+	adapter.advanceCursor(url, progress.source, progress.nextCursor);
+	return fetchNextPage(page, url.toString(), headers, timeoutMs);
+}
+
+function accountListReadError(): Error {
+	return new Error(
+		"アカウント一覧を全件取得できませんでした。保存済みの進捗から再開できます。認証、通信、Xの画面変更を確認してください",
 	);
 }
 
@@ -341,15 +380,17 @@ export async function readAccountList(
 	} catch (error) {
 		const interrupted = interruptedProgress(error, progress);
 		if (interrupted) {
-			await options.onProgress?.(interrupted);
+			try {
+				await options.onProgress?.(interrupted);
+			} catch {
+				// biome-ignore lint/style/useErrorCause: 内部URLや認証情報を含む例外をcauseに保持しない
+				throw accountListReadError();
+			}
 			return interrupted;
 		}
 		if (error instanceof AccountListHttpError) {
 			throw error;
 		}
-		// biome-ignore lint/style/useErrorCause: 内部URLや認証情報を含む例外をcauseに保持しない
-		throw new Error(
-			`アカウント一覧を全件取得できませんでした。保存済みの進捗から再開できます。認証、通信、Xの画面変更を確認してください`,
-		);
+		throw accountListReadError();
 	}
 }

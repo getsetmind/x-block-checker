@@ -13,7 +13,8 @@ import type {
 	AccountListCheckpoint,
 	AccountListSnapshot,
 } from "../src/account-lists/types";
-import { saveResults, withRunLock } from "../src/storage";
+import { withRunLock } from "../src/run-lock";
+import { saveResults } from "../src/storage";
 
 const progress: AccountListCheckpoint = {
 	version: 1,
@@ -167,9 +168,13 @@ describe("storage", () => {
 		}
 	});
 
-	test.each(["blocking", "following", "followers"] as const)(
-		"%sの再試行待ちでも本人確認し、通信せず途中結果を返す",
-		async (kind) => {
+	test.each(
+		(["blocking", "following", "followers"] as const).flatMap((kind) =>
+			(["futureRetry", "complete"] as const).map((state) => ({ kind, state })),
+		),
+	)(
+		"$kindの$state再開時は本人確認し、通信せず保存済み結果を返す",
+		async ({ kind, state }) => {
 			const dir = await mkdtemp(join(tmpdir(), "xbc-checkpoint-cli-test-"));
 			try {
 				const browser = join(dir, "browser.exe");
@@ -200,12 +205,15 @@ describe("storage", () => {
 						`await import(${JSON.stringify(join(import.meta.dir, "../src/cli.ts"))});`,
 					].join("\n"),
 				);
-				const delayed: AccountListCheckpoint = {
-					...progress,
-					stopReason: "rateLimit",
-					retryAt: new Date(Date.now() + 60000).toISOString(),
-				};
-				await saveAccountListCheckpoint(dir, delayed, kind);
+				const checkpoint: AccountListCheckpoint =
+					state === "complete"
+						? { ...progress, complete: true, nextCursor: null }
+						: {
+								...progress,
+								stopReason: "rateLimit",
+								retryAt: new Date(Date.now() + 60000).toISOString(),
+							};
+				await saveAccountListCheckpoint(dir, checkpoint, kind);
 				const mismatched = Bun.spawnSync(
 					[process.execPath, harness, kind, "100"],
 					{ timeout: 5000 },
@@ -215,19 +223,44 @@ describe("storage", () => {
 					"ログインアカウントが異なります",
 				);
 				expect(mismatched.stdout.toString()).toBe("");
-				expect(await readAccountListCheckpoint(dir, kind)).toEqual(delayed);
+				expect(await readAccountListCheckpoint(dir, kind)).toEqual(checkpoint);
+				expect(existsSync(join(dir, `${kind}.json`))).toBeFalse();
+				expect(existsSync(join(dir, `${kind}.md`))).toBeFalse();
+				const rejectedEvents: string[] = JSON.parse(
+					await readFile(receipt, "utf8"),
+				);
+				expect(rejectedEvents).toContain("close");
+				expect(rejectedEvents).not.toContain("network");
 				const command = Bun.spawnSync([process.execPath, harness, kind, "99"], {
 					timeout: 5000,
 				});
-				expect(command.exitCode, command.stderr.toString()).toBe(2);
+				expect(command.exitCode, command.stderr.toString()).toBe(
+					state === "complete" ? 0 : 2,
+				);
 				const output = command.stdout.toString();
-				expect(JSON.parse(output)).toMatchObject({
-					complete: false,
-					pages: 1,
-					stopReason: "rateLimit",
-					retryAt: delayed.retryAt,
-					accounts: progress.accounts,
-				});
+				if (state === "complete") {
+					const snapshot = {
+						version: checkpoint.version,
+						checkedAt: checkpoint.checkedAt,
+						accounts: checkpoint.accounts,
+					};
+					expect(JSON.parse(output)).toEqual(snapshot);
+					expect(
+						JSON.parse(await readFile(join(dir, `${kind}.json`), "utf8")),
+					).toEqual(snapshot);
+					expect(await readFile(join(dir, `${kind}.md`), "utf8")).toContain(
+						"[@Foo](https://x.com/Foo)",
+					);
+					expect(await readAccountListCheckpoint(dir, kind)).toBeUndefined();
+				} else {
+					expect(JSON.parse(output)).toMatchObject({
+						complete: false,
+						pages: 1,
+						stopReason: "rateLimit",
+						retryAt: checkpoint.retryAt,
+						accounts: progress.accounts,
+					});
+				}
 				expect(output).not.toContain("ownerId");
 				expect(output).not.toContain("nextCursor");
 				expect(output).not.toContain("opaque-private-cursor");
