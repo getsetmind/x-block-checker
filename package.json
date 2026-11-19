@@ -18,7 +18,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"puppeteer-core": "25.16.0"
+		"puppeteer-core": "25.18.1"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.6.8",
@@ -28,7 +28,7 @@
 		"@yuu1111/knip-config": "2.1.0",
 		"@yuu1111/quality-check": "7.0.2",
 		"@yuu1111/tsconfig": "1.0.8",
-		"knip": "^6.44.2",
+		"knip": "^6.46.1",
 		"typescript": "^7.0.2"
 	}
 }
