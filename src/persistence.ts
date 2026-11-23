@@ -1,4 +1,5 @@
-import { rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 
 /**
  * @param value - 保存するJSON値
@@ -17,6 +18,7 @@ export async function writeAtomic(
 	contents: string,
 ): Promise<void> {
 	const temporary = `${path}.${process.pid}.tmp`;
+	await mkdir(dirname(path), { recursive: true });
 	try {
 		await writeFile(temporary, contents, "utf8");
 		await rename(temporary, path);

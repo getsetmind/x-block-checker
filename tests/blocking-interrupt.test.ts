@@ -93,9 +93,12 @@ await import(${JSON.stringify(cliPath)});
 			},
 		]);
 		expect(
-			JSON.parse(await readFile(join(dir, "blocking.json"), "utf8")).accounts,
+			JSON.parse(await readFile(join(dir, "lists", "blocking.json"), "utf8"))
+				.accounts,
 		).toHaveLength(2);
-		expect(existsSync(join(dir, "blocking-progress.json"))).toBeFalse();
+		expect(
+			existsSync(join(dir, "progress", "blocking.checkpoint.json")),
+		).toBeFalse();
 		expect(existsSync(join(dir, "run.lock"))).toBeFalse();
 	} finally {
 		await rm(dir, { recursive: true, force: true });

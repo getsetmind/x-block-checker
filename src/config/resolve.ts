@@ -53,7 +53,8 @@ function isConfigFile(value: unknown): value is ConfigFile {
 		hasValidOptionalField(value, "browserExecutable", isString) &&
 		hasValidOptionalField(value, "timeoutSeconds", isNumber) &&
 		hasValidOptionalField(value, "headless", isBoolean) &&
-		hasValidOptionalField(value, "relationshipMode", isRelationshipMode)
+		hasValidOptionalField(value, "relationshipMode", isRelationshipMode) &&
+		hasValidOptionalField(value, "markdown", isBoolean)
 	);
 }
 
@@ -141,5 +142,6 @@ export async function resolveConfig(
 		timeoutMs: timeoutSeconds * 1000,
 		headless: options.headless ?? file.headless ?? true,
 		relationshipMode: resolveRelationshipMode(options, file),
+		markdown: options.markdown ?? file.markdown ?? false,
 	};
 }

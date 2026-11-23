@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -68,26 +68,30 @@ describe("storage", () => {
 						},
 					],
 				};
-				await saveAccountList(dir, snapshot, kind);
-				await saveAccountListCheckpoint(dir, snapshot, kind);
+				await saveAccountList(dir, snapshot, kind, { markdown: true });
+				await saveAccountListCheckpoint(dir, snapshot, kind, {
+					markdown: true,
+				});
 			}
 			await clearAccountListCheckpoint(dir, "following");
 			for (const { kind, title, username } of cases) {
 				expect(
-					JSON.parse(await readFile(join(dir, `${kind}.json`), "utf8"))
+					JSON.parse(await readFile(join(dir, "lists", `${kind}.json`), "utf8"))
 						.accounts[0].username,
 				).toBe(username);
-				expect(await readFile(join(dir, `${kind}.md`), "utf8")).toContain(
-					`# Xで${title}`,
-				);
 				expect(
-					await readFile(join(dir, `${kind}.partial.md`), "utf8"),
+					await readFile(join(dir, "lists", `${kind}.md`), "utf8"),
 				).toContain(`# Xで${title}`);
 				const checkpoint = await readAccountListCheckpoint(dir, kind);
+				const partialMarkdown = join(dir, "progress", `${kind}.partial.md`);
 				if (kind === "following") {
 					expect(checkpoint).toBeUndefined();
+					expect(existsSync(partialMarkdown)).toBeFalse();
 				} else {
 					expect(checkpoint?.accounts[0]?.username).toBe(username);
+					expect(await readFile(partialMarkdown, "utf8")).toContain(
+						`# Xで${title}`,
+					);
 				}
 			}
 		} finally {
@@ -114,6 +118,7 @@ describe("storage", () => {
 						retryAt: "2026-08-15T00:15:00.000Z",
 					},
 					kind,
+					{ markdown: true },
 				);
 				expect(await readAccountListCheckpoint(dir, kind)).toEqual({
 					...progress,
@@ -121,7 +126,7 @@ describe("storage", () => {
 					retryAt: "2026-08-15T00:15:00.000Z",
 				});
 				const partial = await readFile(
-					join(dir, `${kind}.partial.json`),
+					join(dir, "progress", `${kind}.partial.json`),
 					"utf8",
 				);
 				expect(JSON.parse(partial)).toMatchObject({
@@ -133,10 +138,12 @@ describe("storage", () => {
 				expect(partial).not.toContain("nextCursor");
 				expect(partial).not.toContain("opaque-private-cursor");
 				expect(
-					await readFile(join(dir, `${kind}.partial.md`), "utf8"),
+					await readFile(join(dir, "progress", `${kind}.partial.md`), "utf8"),
 				).toContain("全件取得済みの一覧ではありません");
 				expect(
-					JSON.parse(await readFile(join(dir, `${kind}.json`), "utf8")),
+					JSON.parse(
+						await readFile(join(dir, "lists", `${kind}.json`), "utf8"),
+					),
 				).toEqual(complete);
 				const finished: AccountListCheckpoint = {
 					...progress,
@@ -148,7 +155,9 @@ describe("storage", () => {
 				expect(await readAccountListCheckpoint(dir, kind)).toEqual(finished);
 				await saveAccountList(dir, finished, kind);
 				expect(
-					JSON.parse(await readFile(join(dir, `${kind}.json`), "utf8")),
+					JSON.parse(
+						await readFile(join(dir, "lists", `${kind}.json`), "utf8"),
+					),
 				).toEqual({
 					version: 1,
 					checkedAt: progress.checkedAt,
@@ -156,7 +165,11 @@ describe("storage", () => {
 				});
 				await clearAccountListCheckpoint(dir, kind);
 				expect(await readAccountListCheckpoint(dir, kind)).toBeUndefined();
-				expect(existsSync(join(dir, `${kind}.partial.json`))).toBeTrue();
+				for (const name of ["checkpoint.json", "partial.json", "partial.md"]) {
+					expect(
+						existsSync(join(dir, "progress", `${kind}.${name}`)),
+					).toBeFalse();
+				}
 				expect(existsSync(join(dir, "run.lock"))).toBeFalse();
 			} finally {
 				await rm(dir, { recursive: true, force: true });
@@ -202,6 +215,7 @@ describe("storage", () => {
 						browserExecutable: browser,
 						outputDir: dir,
 						profileDir: join(dir, "profile"),
+						markdown: true,
 					}),
 				);
 				await writeFile(
@@ -238,8 +252,8 @@ describe("storage", () => {
 				);
 				expect(mismatched.stdout.toString()).toBe("");
 				expect(await readAccountListCheckpoint(dir, kind)).toEqual(checkpoint);
-				expect(existsSync(join(dir, `${kind}.json`))).toBeFalse();
-				expect(existsSync(join(dir, `${kind}.md`))).toBeFalse();
+				expect(existsSync(join(dir, "lists", `${kind}.json`))).toBeFalse();
+				expect(existsSync(join(dir, "lists", `${kind}.md`))).toBeFalse();
 				const rejectedEvents: string[] = JSON.parse(
 					await readFile(receipt, "utf8"),
 				);
@@ -260,11 +274,13 @@ describe("storage", () => {
 					};
 					expect(JSON.parse(output)).toEqual(snapshot);
 					expect(
-						JSON.parse(await readFile(join(dir, `${kind}.json`), "utf8")),
+						JSON.parse(
+							await readFile(join(dir, "lists", `${kind}.json`), "utf8"),
+						),
 					).toEqual(snapshot);
-					expect(await readFile(join(dir, `${kind}.md`), "utf8")).toContain(
-						"[@Foo](https://x.com/Foo)",
-					);
+					expect(
+						await readFile(join(dir, "lists", `${kind}.md`), "utf8"),
+					).toContain("[@Foo](https://x.com/Foo)");
 					expect(await readAccountListCheckpoint(dir, kind)).toBeUndefined();
 				} else {
 					expect(JSON.parse(output)).toMatchObject({
@@ -290,11 +306,42 @@ describe("storage", () => {
 		},
 	);
 
+	test("Markdownは指定時だけ保存し、既定ではJSONだけを書く", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "xbc-default-json-test-"));
+		try {
+			await saveAccountList(dir, progress, "blocking");
+			await saveAccountListCheckpoint(dir, progress, "blocking");
+			await saveResults(dir, [
+				{
+					username: "Foo",
+					status: "blocked",
+					visibility: "public",
+					checkedAt: progress.checkedAt,
+					url: "https://x.com/Foo",
+				},
+			]);
+			expect(existsSync(join(dir, "lists", "blocking.json"))).toBeTrue();
+			expect(
+				existsSync(join(dir, "progress", "blocking.partial.json")),
+			).toBeTrue();
+			expect(existsSync(join(dir, "check", "latest.json"))).toBeTrue();
+			expect(existsSync(join(dir, "check", "history.json"))).toBeTrue();
+			expect(existsSync(join(dir, "lists", "blocking.md"))).toBeFalse();
+			expect(
+				existsSync(join(dir, "progress", "blocking.partial.md")),
+			).toBeFalse();
+			expect(existsSync(join(dir, "check", "blocked.md"))).toBeFalse();
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	test("壊れたJSONの内容をエラーへ含めない", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "xbc-checkpoint-test-"));
 		try {
+			await mkdir(join(dir, "progress"));
 			await writeFile(
-				join(dir, "blocking-progress.json"),
+				join(dir, "progress", "blocking.checkpoint.json"),
 				'{ "opaque-private-cursor": ',
 			);
 			await expect(readAccountListCheckpoint(dir, "blocking")).rejects.toThrow(
@@ -326,16 +373,16 @@ describe("storage", () => {
 					},
 				],
 			};
-			await saveAccountList(dir, snapshot, "blocking");
+			await saveAccountList(dir, snapshot, "blocking", { markdown: true });
 			const saved = JSON.parse(
-				await readFile(join(dir, "blocking.json"), "utf8"),
+				await readFile(join(dir, "lists", "blocking.json"), "utf8"),
 			);
 			expect(saved.accounts[0].displayName).toBe(
 				"太郎 *[x](https://evil.example)*\n2行目",
 			);
-			const lines = (await readFile(join(dir, "blocking.md"), "utf8")).split(
-				"\n",
-			);
+			const lines = (
+				await readFile(join(dir, "lists", "blocking.md"), "utf8")
+			).split("\n");
 			expect(lines).toContain(
 				"- [@Foo](https://x.com/Foo) 太郎 \\*\\[x\\]\\(https://evil\\.example\\)\\* 2行目",
 			);
@@ -405,8 +452,9 @@ describe("storage", () => {
 	])("不正な再開情報を拒否する: %j", async ({ change }) => {
 		const dir = await mkdtemp(join(tmpdir(), "xbc-checkpoint-test-"));
 		try {
+			await mkdir(join(dir, "progress"));
 			await writeFile(
-				join(dir, "blocking-progress.json"),
+				join(dir, "progress", "blocking.checkpoint.json"),
 				JSON.stringify({ ...progress, ...change }),
 			);
 			await expect(readAccountListCheckpoint(dir, "blocking")).rejects.toThrow(
@@ -420,21 +468,25 @@ describe("storage", () => {
 	test("履歴をマージして最新結果とMarkdownを保存する", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "xbc-storage-test-"));
 		try {
-			await saveResults(dir, [
-				{
-					username: "Foo",
-					status: "blocked",
-					visibility: "public",
-					checkedAt: "2026-08-15T00:00:00.000Z",
-					url: "https://x.com/Foo",
-				},
-			]);
-			expect(
-				JSON.parse(await readFile(join(dir, "latest.json"), "utf8")),
-			).toHaveLength(1);
-			expect(await readFile(join(dir, "blocked.md"), "utf8")).toContain(
-				"[@Foo](https://x.com/Foo)",
+			await saveResults(
+				dir,
+				[
+					{
+						username: "Foo",
+						status: "blocked",
+						visibility: "public",
+						checkedAt: "2026-08-15T00:00:00.000Z",
+						url: "https://x.com/Foo",
+					},
+				],
+				{ markdown: true },
 			);
+			expect(
+				JSON.parse(await readFile(join(dir, "check", "latest.json"), "utf8")),
+			).toHaveLength(1);
+			expect(
+				await readFile(join(dir, "check", "blocked.md"), "utf8"),
+			).toContain("[@Foo](https://x.com/Foo)");
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
@@ -461,22 +513,25 @@ describe("storage", () => {
 			],
 		};
 		try {
-			await saveAccountList(dir, snapshot, "blocking");
+			await saveAccountList(dir, snapshot, "blocking", { markdown: true });
 			expect(
-				JSON.parse(await readFile(join(dir, "blocking.json"), "utf8")),
+				JSON.parse(await readFile(join(dir, "lists", "blocking.json"), "utf8")),
 			).toEqual(snapshot);
-			expect(existsSync(join(dir, "latest.json"))).toBeFalse();
-			expect(existsSync(join(dir, "history.json"))).toBeFalse();
-			expect(existsSync(join(dir, "blocked.md"))).toBeFalse();
+			expect(existsSync(join(dir, "check", "latest.json"))).toBeFalse();
+			expect(existsSync(join(dir, "check", "history.json"))).toBeFalse();
+			expect(existsSync(join(dir, "check", "blocked.md"))).toBeFalse();
 			const replacement: AccountListSnapshot = {
 				...snapshot,
 				accounts: snapshot.accounts.slice(1),
 			};
-			await saveAccountList(dir, replacement, "blocking");
+			await saveAccountList(dir, replacement, "blocking", { markdown: true });
 			expect(
-				JSON.parse(await readFile(join(dir, "blocking.json"), "utf8")),
+				JSON.parse(await readFile(join(dir, "lists", "blocking.json"), "utf8")),
 			).toEqual(replacement);
-			const markdown = await readFile(join(dir, "blocking.md"), "utf8");
+			const markdown = await readFile(
+				join(dir, "lists", "blocking.md"),
+				"utf8",
+			);
 			expect(markdown).toContain("[@Bar](https://x.com/Bar)");
 			expect(markdown).not.toContain("[@Foo]");
 			await saveResults(dir, [
@@ -488,24 +543,33 @@ describe("storage", () => {
 					url: "https://x.com/Incoming",
 				},
 			]);
-			const latest = await readFile(join(dir, "latest.json"), "utf8");
-			const history = await readFile(join(dir, "history.json"), "utf8");
+			const latest = await readFile(join(dir, "check", "latest.json"), "utf8");
+			const history = await readFile(
+				join(dir, "check", "history.json"),
+				"utf8",
+			);
 			expect(latest).not.toContain("Bar");
 			expect(history).not.toContain("Bar");
-			expect(await readFile(join(dir, "blocking.md"), "utf8")).toBe(markdown);
+			expect(await readFile(join(dir, "lists", "blocking.md"), "utf8")).toBe(
+				markdown,
+			);
 			expect(
-				JSON.parse(await readFile(join(dir, "blocking.json"), "utf8")),
+				JSON.parse(await readFile(join(dir, "lists", "blocking.json"), "utf8")),
 			).toEqual(replacement);
 			const empty: AccountListSnapshot = { ...snapshot, accounts: [] };
-			await saveAccountList(dir, empty, "blocking");
+			await saveAccountList(dir, empty, "blocking", { markdown: true });
 			expect(
-				JSON.parse(await readFile(join(dir, "blocking.json"), "utf8")),
+				JSON.parse(await readFile(join(dir, "lists", "blocking.json"), "utf8")),
 			).toEqual(empty);
-			expect(await readFile(join(dir, "blocking.md"), "utf8")).not.toContain(
-				"[@",
+			expect(
+				await readFile(join(dir, "lists", "blocking.md"), "utf8"),
+			).not.toContain("[@");
+			expect(await readFile(join(dir, "check", "latest.json"), "utf8")).toBe(
+				latest,
 			);
-			expect(await readFile(join(dir, "latest.json"), "utf8")).toBe(latest);
-			expect(await readFile(join(dir, "history.json"), "utf8")).toBe(history);
+			expect(await readFile(join(dir, "check", "history.json"), "utf8")).toBe(
+				history,
+			);
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
@@ -524,7 +588,7 @@ describe("storage", () => {
 				},
 			]);
 			const history: unknown = JSON.parse(
-				await readFile(join(dir, "history.json"), "utf8"),
+				await readFile(join(dir, "check", "history.json"), "utf8"),
 			);
 			if (
 				typeof history !== "object" ||

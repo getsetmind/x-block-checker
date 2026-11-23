@@ -1,6 +1,6 @@
-import { mkdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile } from "node:fs/promises";
 import { hasErrorCode } from "./errors";
+import { checkPaths, type OutputOptions } from "./output-paths";
 import { serializeJson, writeAtomic } from "./persistence";
 import { type CheckResult, type History, statusLabels } from "./types";
 
@@ -77,22 +77,25 @@ function blockedMarkdown(results: readonly CheckResult[]): string {
 }
 
 /**
- * 判定結果をlatest.json、history.json、blocked.mdへ原子的に保存する
+ * 判定結果をcheck/のlatest.jsonとhistory.jsonへ原子的に保存する
  *
  * @param outputDir - 保存先ディレクトリ
  * @param current - 今回の判定結果
+ * @param options - markdownを真にするとblocked.mdも保存する
  */
 export async function saveResults(
 	outputDir: string,
 	current: readonly CheckResult[],
+	options: OutputOptions = {},
 ): Promise<void> {
-	await mkdir(outputDir, { recursive: true });
-	const historyPath = join(outputDir, "history.json");
-	const history = mergeHistory(await readHistory(historyPath), current);
-	await writeAtomic(join(outputDir, "latest.json"), serializeJson(current));
-	await writeAtomic(historyPath, serializeJson(history));
-	await writeAtomic(
-		join(outputDir, "blocked.md"),
-		blockedMarkdown(Object.values(history.results)),
-	);
+	const paths = checkPaths(outputDir);
+	const history = mergeHistory(await readHistory(paths.history), current);
+	await writeAtomic(paths.latest, serializeJson(current));
+	await writeAtomic(paths.history, serializeJson(history));
+	if (options.markdown) {
+		await writeAtomic(
+			paths.blocked,
+			blockedMarkdown(Object.values(history.results)),
+		);
+	}
 }

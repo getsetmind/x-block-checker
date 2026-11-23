@@ -68,6 +68,7 @@ describe("resolveConfig", () => {
 				timeoutMs: 30000,
 				headless: false,
 				relationshipMode: "auto",
+				markdown: false,
 			});
 		} finally {
 			await rm(dir, { recursive: true, force: true });

@@ -69,7 +69,9 @@ async function finishAccountList(
 	checkpoint: AccountListCheckpoint,
 	kind: AccountListKind,
 ): Promise<AccountListCheckpoint> {
-	await saveAccountList(config.outputDir, checkpoint, kind);
+	await saveAccountList(config.outputDir, checkpoint, kind, {
+		markdown: config.markdown,
+	});
 	await clearAccountListCheckpoint(config.outputDir, kind);
 	return checkpoint;
 }
@@ -88,7 +90,9 @@ async function resumeAccountListBatch(
 		...(checkpoint ? { checkpoint } : {}),
 		pageLimit: options.pageLimit ?? 25,
 		onProgress: (progress) =>
-			saveAccountListCheckpoint(config.outputDir, progress, options.command),
+			saveAccountListCheckpoint(config.outputDir, progress, options.command, {
+				markdown: config.markdown,
+			}),
 	});
 }
 
@@ -123,6 +127,7 @@ async function collectList(
 			config.outputDir,
 			checkpoint,
 			options.command,
+			{ markdown: config.markdown },
 		);
 		if (checkpoint.complete) {
 			return finishAccountList(config, checkpoint, options.command);

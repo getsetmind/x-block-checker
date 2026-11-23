@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -21,9 +21,11 @@ test.each(["following", "followers"] as const)(
 					profileDir: join(dir, "profile"),
 					users: ["Ignored"],
 					input: "missing.txt",
+					markdown: true,
 				}),
 			);
-			await writeFile(join(dir, "blocking.json"), "untouched");
+			await mkdir(join(dir, "lists"));
+			await writeFile(join(dir, "lists", "blocking.json"), "untouched");
 			await writeFile(
 				harness,
 				`const { default: puppeteer } = await import(${JSON.stringify(import.meta.resolve("puppeteer-core"))});
@@ -106,15 +108,17 @@ await import(${JSON.stringify(resolve("src/cli.ts"))});
 			expect(second.stdout.toString()).not.toContain("ownerId");
 			expect(second.stdout.toString()).not.toContain("synthetic-secret");
 			expect(
-				JSON.parse(await readFile(join(dir, `${kind}.json`), "utf8")),
+				JSON.parse(await readFile(join(dir, "lists", `${kind}.json`), "utf8")),
 			).toEqual(result);
-			expect(await readFile(join(dir, `${kind}.md`), "utf8")).toContain(
-				"@Alpha",
-			);
-			expect(await readFile(join(dir, "blocking.json"), "utf8")).toBe(
+			expect(
+				await readFile(join(dir, "lists", `${kind}.md`), "utf8"),
+			).toContain("@Alpha");
+			expect(await readFile(join(dir, "lists", "blocking.json"), "utf8")).toBe(
 				"untouched",
 			);
-			expect(existsSync(join(dir, `${kind}-progress.json`))).toBeFalse();
+			expect(
+				existsSync(join(dir, "progress", `${kind}.checkpoint.json`)),
+			).toBeFalse();
 			expect(existsSync(join(dir, "run.lock"))).toBeFalse();
 		} finally {
 			await rm(dir, { recursive: true, force: true });

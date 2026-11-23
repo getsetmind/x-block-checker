@@ -62,7 +62,7 @@ globalThis.setTimeout = Object.assign((callback, delay = 0) => {
 mock.module(${JSON.stringify(browserModule)}, () => ({
  collectAccountList: async (config, options) => {
   const checkpoint = options.checkpoint;
-  const saved = JSON.parse(await readFile(join(config.outputDir, "blocking-progress.json"), "utf8"));
+  const saved = JSON.parse(await readFile(join(config.outputDir, "progress", "blocking.checkpoint.json"), "utf8"));
   if (!checkpoint || saved.nextCursor !== checkpoint.nextCursor || saved.pages !== checkpoint.pages) throw new Error("saved cursor was not resumed");
   calls.push({ at: now, pages: checkpoint.pages, cursor: checkpoint.nextCursor, locked: existsSync(join(config.outputDir, "run.lock")) });
   const { retryAt, stopReason, ...base } = checkpoint;
@@ -114,10 +114,13 @@ await writeFile(${JSON.stringify(report)}, JSON.stringify({ calls, delays }));
 		).toEqual(["10", "20", "30"]);
 		expect(output).not.toContain("ownerId");
 		expect(output).not.toContain("private-cursor");
-		expect(existsSync(join(dir, "blocking-progress.json"))).toBeFalse();
+		expect(
+			existsSync(join(dir, "progress", "blocking.checkpoint.json")),
+		).toBeFalse();
 		expect(existsSync(join(dir, "run.lock"))).toBeFalse();
 		expect(
-			JSON.parse(await readFile(join(dir, "blocking.json"), "utf8")).accounts,
+			JSON.parse(await readFile(join(dir, "lists", "blocking.json"), "utf8"))
+				.accounts,
 		).toHaveLength(3);
 	} finally {
 		await rm(dir, { recursive: true, force: true });

@@ -110,6 +110,7 @@ export interface ConfigFile {
 	timeoutSeconds?: number;
 	headless?: boolean;
 	relationshipMode?: RelationshipMode;
+	markdown?: boolean;
 }
 
 /**
@@ -123,6 +124,7 @@ export interface RuntimeConfig {
 	timeoutMs: number;
 	headless: boolean;
 	relationshipMode: RelationshipMode;
+	markdown: boolean;
 }
 
 /**

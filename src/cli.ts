@@ -74,7 +74,7 @@ function printHelp(): void {
 オプション:
   -c, --config <path>     設定ファイル (既定: x-block-checker.config.json)
   -i, --input <path>      改行・空白・カンマ区切りのユーザー一覧
-      --output-dir <path> checkの結果・履歴、各一覧の保存先
+      --output-dir <path> 保存先 (check/・lists/・progress/ を作成)
       --profile-dir <path> ブラウザプロファイル保存先
       --browser <path>    Chrome、Brave、Edge、Chromiumの実行ファイル
       --timeout <秒>      1件あたりの待機上限 (5〜120)
@@ -85,6 +85,7 @@ function printHelp(): void {
       --wait              一覧取得の制限解除・次バッチを待って継続
       --page-limit <N>    一覧取得の1バッチのページ数 (1〜100、既定25)
       --restart           対象一覧の再開情報を破棄して最初から取得
+      --markdown          結果・一覧のMarkdownも保存 (既定はJSONのみ)
       --json              結果をJSONで標準出力
   -h, --help              ヘルプを表示
 
@@ -135,7 +136,9 @@ async function runCheck(
 				);
 			}
 		});
-		await saveResults(config.outputDir, checked);
+		await saveResults(config.outputDir, checked, {
+			markdown: config.markdown,
+		});
 		return checked;
 	});
 }

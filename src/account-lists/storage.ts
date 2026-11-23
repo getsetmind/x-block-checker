@@ -1,7 +1,7 @@
-import { mkdir, readFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile, rm } from "node:fs/promises";
 import { isUsername } from "../config/usernames";
 import { hasErrorCode } from "../errors";
+import { listPaths, type OutputOptions, progressPaths } from "../output-paths";
 import { serializeJson, writeAtomic } from "../persistence";
 import type {
 	Account,
@@ -14,31 +14,37 @@ import type {
  * @param outputDir - 保存先ディレクトリ
  * @param snapshot - 全件取得済みの一覧
  * @param kind - 保存対象の一覧種別
+ * @param options - markdownを真にするとMarkdown一覧も保存する
  */
 export async function saveAccountList(
 	outputDir: string,
 	snapshot: AccountListSnapshot,
 	kind: AccountListKind,
+	options: OutputOptions = {},
 ): Promise<void> {
-	await mkdir(outputDir, { recursive: true });
-	const markdown = [
-		`# Xで${accountListTitles[kind]}`,
-		"",
-		`確認日時: ${snapshot.checkedAt}`,
-		`件数: ${snapshot.accounts.length}`,
-		"",
-		...snapshot.accounts.map(formatAccountLine),
-		"",
-	].join("\n");
+	const paths = listPaths(outputDir, kind);
 	await writeAtomic(
-		join(outputDir, `${kind}.json`),
+		paths.json,
 		serializeJson({
 			version: snapshot.version,
 			checkedAt: snapshot.checkedAt,
 			accounts: snapshot.accounts,
 		}),
 	);
-	await writeAtomic(join(outputDir, `${kind}.md`), markdown);
+	if (options.markdown) {
+		await writeAtomic(
+			paths.markdown,
+			[
+				`# Xで${accountListTitles[kind]}`,
+				"",
+				`確認日時: ${snapshot.checkedAt}`,
+				`件数: ${snapshot.accounts.length}`,
+				"",
+				...snapshot.accounts.map(formatAccountLine),
+				"",
+			].join("\n"),
+		);
+	}
 }
 
 function formatAccountLine(account: Account): string {
@@ -222,7 +228,10 @@ export async function readAccountListCheckpoint(
 ): Promise<AccountListCheckpoint | undefined> {
 	let contents: string;
 	try {
-		contents = await readFile(join(outputDir, `${kind}-progress.json`), "utf8");
+		contents = await readFile(
+			progressPaths(outputDir, kind).checkpoint,
+			"utf8",
+		);
 	} catch (error) {
 		if (hasErrorCode(error, "ENOENT")) {
 			return undefined;
@@ -250,25 +259,24 @@ export async function readAccountListCheckpoint(
  * @param outputDir - 保存先ディレクトリ
  * @param progress - 再開可能な取得進捗
  * @param kind - 保存対象の一覧種別
+ * @param options - markdownを真にすると途中経過のMarkdownも保存する
  */
 export async function saveAccountListCheckpoint(
 	outputDir: string,
 	progress: AccountListCheckpoint,
 	kind: AccountListKind,
+	options: OutputOptions = {},
 ): Promise<void> {
 	if (!isCheckpoint(progress)) {
 		throw new Error(`${accountListLabels[kind]}の再開情報が不正です`);
 	}
-	await mkdir(outputDir, { recursive: true });
-	await writeAtomic(
-		join(outputDir, `${kind}-progress.json`),
-		serializeJson(progress),
-	);
+	const paths = progressPaths(outputDir, kind);
+	await writeAtomic(paths.checkpoint, serializeJson(progress));
 	const { ownerId: _ownerId, nextCursor: _nextCursor, ...partial } = progress;
-	await writeAtomic(
-		join(outputDir, `${kind}.partial.json`),
-		serializeJson(partial),
-	);
+	await writeAtomic(paths.partialJson, serializeJson(partial));
+	if (!options.markdown) {
+		return;
+	}
 	const markdown = [
 		progress.complete
 			? `# Xで${accountListTitles[kind]}（全件取得済み）`
@@ -285,10 +293,12 @@ export async function saveAccountListCheckpoint(
 		...progress.accounts.map(formatAccountLine),
 		"",
 	].join("\n");
-	await writeAtomic(join(outputDir, `${kind}.partial.md`), markdown);
+	await writeAtomic(paths.partialMarkdown, markdown);
 }
 
 /**
+ * 取得途中だけに存在する再開情報と途中経過をすべて削除する
+ *
  * @param outputDir - 保存先ディレクトリ
  * @param kind - 保存対象の一覧種別
  */
@@ -296,5 +306,10 @@ export async function clearAccountListCheckpoint(
 	outputDir: string,
 	kind: AccountListKind,
 ): Promise<void> {
-	await rm(join(outputDir, `${kind}-progress.json`), { force: true });
+	const paths = progressPaths(outputDir, kind);
+	await Promise.all(
+		[paths.checkpoint, paths.partialJson, paths.partialMarkdown].map((path) =>
+			rm(path, { force: true }),
+		),
+	);
 }

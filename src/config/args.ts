@@ -27,6 +27,7 @@ export interface CliOptions {
 	headless?: boolean;
 	relationshipMode?: RelationshipMode;
 	json: boolean;
+	markdown?: boolean;
 	wait?: boolean;
 	restart?: boolean;
 	pageLimit?: number;
@@ -186,6 +187,9 @@ export function parseArgs(argv: readonly string[]): CliOptions {
 				break;
 			case "--json":
 				options.json = true;
+				break;
+			case "--markdown":
+				options.markdown = true;
 				break;
 			case "--help":
 			case "-h":
