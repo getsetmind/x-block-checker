@@ -21,7 +21,14 @@ const progress: AccountListCheckpoint = {
 	ownerId: "99",
 	checkedAt: "2026-08-15T00:00:00.000Z",
 	startedAt: "2026-08-14T23:59:00.000Z",
-	accounts: [{ id: "1", username: "Foo", url: "https://x.com/Foo" }],
+	accounts: [
+		{
+			id: "1",
+			username: "Foo",
+			displayName: "表示名Foo",
+			url: "https://x.com/Foo",
+		},
+	],
 	source: "graphql",
 	nextCursor: "opaque-private-cursor",
 	pages: 1,
@@ -52,7 +59,14 @@ describe("storage", () => {
 			for (const { kind, username } of cases) {
 				const snapshot = {
 					...progress,
-					accounts: [{ id: "1", username, url: `https://x.com/${username}` }],
+					accounts: [
+						{
+							id: "1",
+							username,
+							displayName: `表示名${username}`,
+							url: `https://x.com/${username}`,
+						},
+					],
 				};
 				await saveAccountList(dir, snapshot, kind);
 				await saveAccountListCheckpoint(dir, snapshot, kind);
@@ -291,8 +305,65 @@ describe("storage", () => {
 		}
 	});
 
+	test("表示名をJSONへ保存し、Markdownでは記法を無効化して併記する", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "xbc-display-name-test-"));
+		try {
+			const snapshot: AccountListSnapshot = {
+				version: 1,
+				checkedAt: progress.checkedAt,
+				accounts: [
+					{
+						id: "1",
+						username: "Foo",
+						displayName: "太郎 *[x](https://evil.example)*\n2行目",
+						url: "https://x.com/Foo",
+					},
+					{
+						id: "2",
+						username: "Bar",
+						displayName: "",
+						url: "https://x.com/Bar",
+					},
+				],
+			};
+			await saveAccountList(dir, snapshot, "blocking");
+			const saved = JSON.parse(
+				await readFile(join(dir, "blocking.json"), "utf8"),
+			);
+			expect(saved.accounts[0].displayName).toBe(
+				"太郎 *[x](https://evil.example)*\n2行目",
+			);
+			const lines = (await readFile(join(dir, "blocking.md"), "utf8")).split(
+				"\n",
+			);
+			expect(lines).toContain(
+				"- [@Foo](https://x.com/Foo) 太郎 \\*\\[x\\]\\(https://evil\\.example\\)\\* 2行目",
+			);
+			expect(lines).toContain("- [@Bar](https://x.com/Bar)");
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	test.each([
 		{ change: { ownerId: "other" } },
+		{
+			change: {
+				accounts: [{ id: "1", username: "Foo", url: "https://x.com/Foo" }],
+			},
+		},
+		{
+			change: {
+				accounts: [
+					{
+						id: "1",
+						username: "Foo",
+						displayName: 1,
+						url: "https://x.com/Foo",
+					},
+				],
+			},
+		},
 		{ change: { source: "unknown" } },
 		{ change: { pages: -1 } },
 		{ change: { pages: 0 } },
@@ -308,13 +379,25 @@ describe("storage", () => {
 		{ change: { headers: { authorization: "secret" } } },
 		{
 			change: {
-				accounts: [{ id: "1", username: "bad/name", url: "https://x.com/Foo" }],
+				accounts: [
+					{
+						id: "1",
+						username: "bad/name",
+						displayName: "表示名bad/name",
+						url: "https://x.com/Foo",
+					},
+				],
 			},
 		},
 		{
 			change: {
 				accounts: [
-					{ id: "1", username: "Foo", url: "https://evil.example/Foo" },
+					{
+						id: "1",
+						username: "Foo",
+						displayName: "表示名Foo",
+						url: "https://evil.example/Foo",
+					},
 				],
 			},
 		},
@@ -363,8 +446,18 @@ describe("storage", () => {
 			version: 1,
 			checkedAt: "2026-08-15T00:00:00.000Z",
 			accounts: [
-				{ id: "1", username: "Foo", url: "https://x.com/Foo" },
-				{ id: "2", username: "Bar", url: "https://x.com/Bar" },
+				{
+					id: "1",
+					username: "Foo",
+					displayName: "表示名Foo",
+					url: "https://x.com/Foo",
+				},
+				{
+					id: "2",
+					username: "Bar",
+					displayName: "表示名Bar",
+					url: "https://x.com/Bar",
+				},
 			],
 		};
 		try {

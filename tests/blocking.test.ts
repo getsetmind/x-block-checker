@@ -13,7 +13,11 @@ type BlockingResponse = Awaited<ReturnType<BlockingPage["waitForResponse"]>>;
 
 const endpoint = "https://x.com/i/api/1.1/blocks/list.json?count=20&cursor=-1";
 const secret = "synthetic-token-not-to-log";
-const user = (id: string, screen_name: string) => ({ id_str: id, screen_name });
+const user = (id: string, screen_name: string) => ({
+	id_str: id,
+	screen_name,
+	name: `表示名${screen_name}`,
+});
 
 function response(
 	payload: unknown,
@@ -145,7 +149,7 @@ afterEach(() => {
 });
 
 function graphqlPage(
-	users: { id: string; username: string }[],
+	users: { id: string; username: string; displayName: string }[],
 	cursor?: string | string[],
 	terminated = false,
 	kind: AccountListKind = "blocking",
@@ -171,7 +175,10 @@ function graphqlPage(
 														__typename: "User",
 														id: "encoded-not-rest-id",
 														rest_id: account.id,
-														core: { screen_name: account.username },
+														core: {
+															screen_name: account.username,
+															name: account.displayName,
+														},
 													},
 												},
 											},
@@ -216,7 +223,7 @@ describe("readFollowList", () => {
 				[
 					response(
 						graphqlPage(
-							[{ id: "1", username: "Saved" }],
+							[{ id: "1", username: "Saved", displayName: "表示名Saved" }],
 							"private-cursor",
 							false,
 							"followers",
@@ -243,7 +250,12 @@ describe("readFollowList", () => {
 				await expect(result).resolves.toMatchObject({
 					pages: 1,
 					accounts: [
-						{ id: "1", username: "Saved", url: "https://x.com/Saved" },
+						{
+							id: "1",
+							username: "Saved",
+							displayName: "表示名Saved",
+							url: "https://x.com/Saved",
+						},
 					],
 					nextCursor: "private-cursor",
 					stopReason: "rateLimit",
@@ -264,7 +276,14 @@ describe("readFollowList", () => {
 				version: 1 as const,
 				checkedAt: "2026-01-01T00:00:00.000Z",
 				startedAt: "2026-01-01T00:00:00.000Z",
-				accounts: [{ id: "1", username: "Saved", url: "https://x.com/Saved" }],
+				accounts: [
+					{
+						id: "1",
+						username: "Saved",
+						displayName: "表示名Saved",
+						url: "https://x.com/Saved",
+					},
+				],
 				source: "graphql" as const,
 				pages: 1,
 				nextCursor: state === "complete" ? null : "saved-cursor",
@@ -300,7 +319,7 @@ describe("readFollowList", () => {
 				return url.toString();
 			};
 			const initial = graphqlPage(
-				[{ id: "1", username: "OldName" }],
+				[{ id: "1", username: "OldName", displayName: "表示名OldName" }],
 				"private-follow-cursor",
 				false,
 				kind,
@@ -331,8 +350,8 @@ describe("readFollowList", () => {
 					requests.push(url);
 					return graphqlPage(
 						[
-							{ id: "1", username: "Renamed" },
-							{ id: "2", username: "Alpha" },
+							{ id: "1", username: "Renamed", displayName: "表示名Renamed" },
+							{ id: "2", username: "Alpha", displayName: "表示名Alpha" },
 						],
 						undefined,
 						true,
@@ -461,7 +480,10 @@ describe("readBlockingList", () => {
 				? "https://x.com/i/api/graphql/synthetic-query-id/BlockedAccountsAll?variables=%7B%22count%22%3A20%7D"
 				: endpoint;
 			const firstPayload = graphql
-				? graphqlPage([{ id: "1", username: "Foo" }], cursor)
+				? graphqlPage(
+						[{ id: "1", username: "Foo", displayName: "表示名Foo" }],
+						cursor,
+					)
 				: { users: [user("1", "Foo")], next_cursor_str: cursor };
 			const receipts: {
 				pages: number;
@@ -502,7 +524,11 @@ describe("readBlockingList", () => {
 						return new Response(
 							JSON.stringify(
 								graphql
-									? graphqlPage([{ id: "2", username: "Bar" }], undefined, true)
+									? graphqlPage(
+											[{ id: "2", username: "Bar", displayName: "表示名Bar" }],
+											undefined,
+											true,
+										)
 									: { users: [user("2", "Bar")], next_cursor_str: "0" },
 							),
 						);
@@ -511,7 +537,16 @@ describe("readBlockingList", () => {
 				),
 			);
 			const ignored = graphql
-				? graphqlPage([{ id: "99", username: "NotResumed" }], "ignored")
+				? graphqlPage(
+						[
+							{
+								id: "99",
+								username: "NotResumed",
+								displayName: "表示名NotResumed",
+							},
+						],
+						"ignored",
+					)
 				: { users: [user("99", "NotResumed")], next_cursor_str: "999" };
 			const second = await readBlockingList(
 				browserPage([response(ignored, url)]),
@@ -564,7 +599,12 @@ describe("readBlockingList", () => {
 		});
 		expect(saved).toEqual([1, 1]);
 		expect(result.accounts).toEqual([
-			{ id: "1", username: "Foo", url: "https://x.com/Foo" },
+			{
+				id: "1",
+				username: "Foo",
+				displayName: "表示名Foo",
+				url: "https://x.com/Foo",
+			},
 		]);
 		const blocked = await readBlockingList(browserPage([]), 5000, {
 			checkpoint: result,
@@ -651,7 +691,11 @@ describe("readBlockingList", () => {
 					requested.push(new URL(String(input)));
 					return new Response(
 						JSON.stringify(
-							graphqlPage([{ id: "2", username: "Alpha" }], undefined, true),
+							graphqlPage(
+								[{ id: "2", username: "Alpha", displayName: "表示名Alpha" }],
+								undefined,
+								true,
+							),
 						),
 					);
 				},
@@ -661,15 +705,28 @@ describe("readBlockingList", () => {
 		const result = await readBlockingList(
 			browserPage([
 				response(
-					graphqlPage([{ id: "1", username: "Zulu" }], "opaque-next-cursor"),
+					graphqlPage(
+						[{ id: "1", username: "Zulu", displayName: "表示名Zulu" }],
+						"opaque-next-cursor",
+					),
 					url.toString(),
 				),
 			]),
 			5000,
 		);
 		expect(result.accounts).toEqual([
-			{ id: "2", username: "Alpha", url: "https://x.com/Alpha" },
-			{ id: "1", username: "Zulu", url: "https://x.com/Zulu" },
+			{
+				id: "2",
+				username: "Alpha",
+				displayName: "表示名Alpha",
+				url: "https://x.com/Alpha",
+			},
+			{
+				id: "1",
+				username: "Zulu",
+				displayName: "表示名Zulu",
+				url: "https://x.com/Zulu",
+			},
 		]);
 		expect(requested).toHaveLength(1);
 		expect(
@@ -725,12 +782,23 @@ describe("readBlockingList", () => {
 			"https://x.com/i/api/graphql/synthetic-query-id/BlockedAccountsAll?variables=%7B%22count%22%3A20%7D";
 		const result = await readBlockingList(
 			browserPage([
-				response(graphqlPage([{ id: "1", username: "Foo" }], "first"), url),
+				response(
+					graphqlPage(
+						[{ id: "1", username: "Foo", displayName: "表示名Foo" }],
+						"first",
+					),
+					url,
+				),
 			]),
 			5000,
 		);
 		expect(result.accounts).toEqual([
-			{ id: "1", username: "Foo", url: "https://x.com/Foo" },
+			{
+				id: "1",
+				username: "Foo",
+				displayName: "表示名Foo",
+				url: "https://x.com/Foo",
+			},
 		]);
 		expect(pages).toBe(2);
 	});
@@ -755,7 +823,7 @@ describe("readBlockingList", () => {
 		{
 			name: "不正なアカウント名",
 			payload: graphqlPage(
-				[{ id: "1", username: "bad/name" }],
+				[{ id: "1", username: "bad/name", displayName: "表示名bad/name" }],
 				undefined,
 				true,
 			),
@@ -806,9 +874,24 @@ describe("readBlockingList", () => {
 		expect(result.version).toBe(1);
 		expect(Number.isNaN(Date.parse(result.checkedAt))).toBeFalse();
 		expect(result.accounts).toEqual([
-			{ id: "3", username: "Alpha", url: "https://x.com/Alpha" },
-			{ id: "1", username: "Renamed", url: "https://x.com/Renamed" },
-			{ id: "2", username: "Zulu", url: "https://x.com/Zulu" },
+			{
+				id: "3",
+				username: "Alpha",
+				displayName: "表示名Alpha",
+				url: "https://x.com/Alpha",
+			},
+			{
+				id: "1",
+				username: "Renamed",
+				displayName: "表示名Renamed",
+				url: "https://x.com/Renamed",
+			},
+			{
+				id: "2",
+				username: "Zulu",
+				displayName: "表示名Zulu",
+				url: "https://x.com/Zulu",
+			},
 		]);
 		expect(requests).toHaveLength(1);
 		expect(requests[0]?.url.searchParams.get("cursor")).toBe(

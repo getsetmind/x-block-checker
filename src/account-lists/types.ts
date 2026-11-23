@@ -9,6 +9,7 @@ export type AccountListKind = "blocking" | "following" | "followers";
 export interface Account {
 	id: string;
 	username: string;
+	displayName: string;
 	url: string;
 }
 

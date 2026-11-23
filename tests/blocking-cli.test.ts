@@ -21,7 +21,14 @@ test("--waitは期限を守り同じ再開位置を保って制限解除後に�
 			nextCursor: "first-private-cursor",
 			stopReason: "rateLimit",
 			retryAt: new Date(start + 120000).toISOString(),
-			accounts: [{ id: "10", username: "Foo", url: "https://x.com/Foo" }],
+			accounts: [
+				{
+					id: "10",
+					username: "Foo",
+					displayName: "表示名Foo",
+					url: "https://x.com/Foo",
+				},
+			],
 		};
 		await saveAccountListCheckpoint(dir, initial, "blocking");
 		const configPath = join(dir, "config.json");
@@ -60,9 +67,9 @@ mock.module(${JSON.stringify(browserModule)}, () => ({
   calls.push({ at: now, pages: checkpoint.pages, cursor: checkpoint.nextCursor, locked: existsSync(join(config.outputDir, "run.lock")) });
   const { retryAt, stopReason, ...base } = checkpoint;
   let next;
-  if (calls.length === 1) next = { ...base, checkedAt: new Date(now).toISOString(), pages: 2, nextCursor: "second-private-cursor", stopReason: "pageLimit", accounts: [...base.accounts, { id: "20", username: "Bar", url: "https://x.com/Bar" }] };
+  if (calls.length === 1) next = { ...base, checkedAt: new Date(now).toISOString(), pages: 2, nextCursor: "second-private-cursor", stopReason: "pageLimit", accounts: [...base.accounts, { id: "20", username: "Bar", displayName: "表示名Bar", url: "https://x.com/Bar" }] };
   else if (calls.length === 2) next = { ...base, stopReason: "rateLimit", retryAt: new Date(now + 300000).toISOString() };
-  else if (calls.length === 3) next = { ...base, checkedAt: new Date(now).toISOString(), pages: 3, nextCursor: null, complete: true, accounts: [...base.accounts, { id: "30", username: "Baz", url: "https://x.com/Baz" }] };
+  else if (calls.length === 3) next = { ...base, checkedAt: new Date(now).toISOString(), pages: 3, nextCursor: null, complete: true, accounts: [...base.accounts, { id: "30", username: "Baz", displayName: "表示名Baz", url: "https://x.com/Baz" }] };
   else throw new Error("unexpected retry");
   await options.onProgress(next);
   return next;

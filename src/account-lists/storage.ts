@@ -27,9 +27,7 @@ export async function saveAccountList(
 		`確認日時: ${snapshot.checkedAt}`,
 		`件数: ${snapshot.accounts.length}`,
 		"",
-		...snapshot.accounts.map(
-			(account) => `- [@${account.username}](${account.url})`,
-		),
+		...snapshot.accounts.map(formatAccountLine),
 		"",
 	].join("\n");
 	await writeAtomic(
@@ -41,6 +39,14 @@ export async function saveAccountList(
 		}),
 	);
 	await writeAtomic(join(outputDir, `${kind}.md`), markdown);
+}
+
+function formatAccountLine(account: Account): string {
+	const displayName = account.displayName
+		.replace(/\s+/g, " ")
+		.trim()
+		.replace(/[\\`*_{}[\]<>()#+\-.!|~&]/g, "\\$&");
+	return `- [@${account.username}](${account.url})${displayName ? ` ${displayName}` : ""}`;
 }
 
 const accountListTitles: Record<AccountListKind, string> = {
@@ -74,7 +80,10 @@ function isDate(value: unknown): value is string {
 }
 
 function isAccount(value: unknown): value is Account {
-	if (!isRecord(value) || !hasOnlyKeys(value, ["id", "username", "url"])) {
+	if (
+		!isRecord(value) ||
+		!hasOnlyKeys(value, ["id", "username", "displayName", "url"])
+	) {
 		return false;
 	}
 	return (
@@ -82,6 +91,7 @@ function isAccount(value: unknown): value is Account {
 		/^[1-9]\d*$/.test(value.id) &&
 		typeof value.username === "string" &&
 		isUsername(value.username) &&
+		typeof value.displayName === "string" &&
 		value.url === `https://x.com/${value.username}`
 	);
 }
@@ -272,9 +282,7 @@ export async function saveAccountListCheckpoint(
 		`件数: ${progress.accounts.length}`,
 		`取得ページ数: ${progress.pages}`,
 		"",
-		...progress.accounts.map(
-			(account) => `- [@${account.username}](${account.url})`,
-		),
+		...progress.accounts.map(formatAccountLine),
 		"",
 	].join("\n");
 	await writeAtomic(join(outputDir, `${kind}.partial.md`), markdown);

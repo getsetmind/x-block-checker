@@ -24,7 +24,7 @@ test("ページ保存後の強制終了でも次プロセスが古いロック�
 const interrupted = process.argv[2] === "interrupt";
 mock.module(${JSON.stringify(browserModule)}, () => ({
  collectAccountList: async (config, options) => {
-  const first = { version: 1, ownerId: "1", checkedAt: "2026-08-15T00:00:00.000Z", startedAt: "2026-08-15T00:00:00.000Z", source: "graphql", pages: 1, nextCursor: "saved-private-cursor", complete: false, accounts: [{ id: "10", username: "Foo", url: "https://x.com/Foo" }] };
+  const first = { version: 1, ownerId: "1", checkedAt: "2026-08-15T00:00:00.000Z", startedAt: "2026-08-15T00:00:00.000Z", source: "graphql", pages: 1, nextCursor: "saved-private-cursor", complete: false, accounts: [{ id: "10", username: "Foo", displayName: "表示名Foo", url: "https://x.com/Foo" }] };
   if (interrupted) {
    await options.onProgress(first);
    process.stdout.write("checkpoint-saved\n");
@@ -32,7 +32,7 @@ mock.module(${JSON.stringify(browserModule)}, () => ({
    await new Promise(() => {});
   }
   if (options.checkpoint?.nextCursor !== "saved-private-cursor" || options.checkpoint?.accounts.length !== 1) throw new Error("checkpoint was not resumed");
-  const finished = { ...options.checkpoint, pages: 2, complete: true, nextCursor: null, accounts: [...options.checkpoint.accounts, { id: "20", username: "Bar", url: "https://x.com/Bar" }] };
+  const finished = { ...options.checkpoint, pages: 2, complete: true, nextCursor: null, accounts: [...options.checkpoint.accounts, { id: "20", username: "Bar", displayName: "表示名Bar", url: "https://x.com/Bar" }] };
   await options.onProgress(finished);
   return finished;
  },
@@ -79,8 +79,18 @@ await import(${JSON.stringify(cliPath)});
 		});
 		expect(resumed.exitCode, resumed.stderr.toString()).toBe(0);
 		expect(JSON.parse(resumed.stdout.toString()).accounts).toEqual([
-			{ id: "10", username: "Foo", url: "https://x.com/Foo" },
-			{ id: "20", username: "Bar", url: "https://x.com/Bar" },
+			{
+				id: "10",
+				username: "Foo",
+				displayName: "表示名Foo",
+				url: "https://x.com/Foo",
+			},
+			{
+				id: "20",
+				username: "Bar",
+				displayName: "表示名Bar",
+				url: "https://x.com/Bar",
+			},
 		]);
 		expect(
 			JSON.parse(await readFile(join(dir, "blocking.json"), "utf8")).accounts,

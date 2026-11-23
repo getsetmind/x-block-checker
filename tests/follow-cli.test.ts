@@ -31,7 +31,7 @@ const kind = process.argv[2];
 const operation = kind === "following" ? "Following" : "Followers";
 const url = new URL("https://x.com/i/api/graphql/synthetic/" + operation);
 url.searchParams.set("variables", JSON.stringify({ userId: "111", count: 20 }));
-const user = (id, username) => ({ content: { entryType: "TimelineTimelineItem", itemContent: { itemType: "TimelineUser", user_results: { result: { __typename: "User", rest_id: id, core: { screen_name: username } } } } } });
+const user = (id, username) => ({ content: { entryType: "TimelineTimelineItem", itemContent: { itemType: "TimelineUser", user_results: { result: { __typename: "User", rest_id: id, core: { screen_name: username, name: "表示名" + username } } } } } });
 const payload = (last) => ({ data: { user: { result: { timeline: { timeline: { instructions: [{ type: "TimelineAddEntries", entries: [user(last ? "2" : "1", last ? "Alpha" : "Zulu"), ...(!last ? [{ content: { entryType: "TimelineTimelineCursor", cursorType: "Bottom", value: "private-next" } }] : [])] }, ...(last ? [{ type: "TimelineTerminateTimeline", direction: "Bottom" }] : [])] } } } } } });
 let current = "";
 let intercepting = false;
@@ -81,7 +81,14 @@ await import(${JSON.stringify(resolve("src/cli.ts"))});
 			expect(JSON.parse(first.stdout.toString())).toMatchObject({
 				complete: false,
 				pages: 1,
-				accounts: [{ id: "1", username: "Zulu", url: "https://x.com/Zulu" }],
+				accounts: [
+					{
+						id: "1",
+						username: "Zulu",
+						displayName: "表示名Zulu",
+						url: "https://x.com/Zulu",
+					},
+				],
 			});
 			expect(first.stdout.toString()).not.toContain("private-next");
 			const second = Bun.spawnSync([process.execPath, harness, kind], {

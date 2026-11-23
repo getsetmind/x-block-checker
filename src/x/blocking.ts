@@ -28,15 +28,17 @@ function readAccount(value: unknown): Account {
 	}
 	const id = cursorString(value.id_str ?? value.id);
 	const username = value.screen_name;
+	const displayName = value.name;
 	if (
 		!id ||
 		id === "0" ||
 		typeof username !== "string" ||
-		!isUsername(username)
+		!isUsername(username) ||
+		typeof displayName !== "string"
 	) {
 		throw new Error("ブロック一覧のユーザー形式が未対応です");
 	}
-	return { id, username, url: `https://x.com/${username}` };
+	return { id, username, displayName, url: `https://x.com/${username}` };
 }
 
 function readBlockingPage(payload: unknown): {

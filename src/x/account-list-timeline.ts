@@ -18,17 +18,19 @@ function readUser(content: Record<string, unknown>): Account {
 	const core = record(result.core ?? result.legacy);
 	const id = result.rest_id;
 	const username = core.screen_name;
+	const displayName = core.name;
 	if (
 		item.itemType !== "TimelineUser" ||
 		result.__typename !== "User" ||
 		typeof id !== "string" ||
 		!/^[1-9]\d*$/.test(id) ||
 		typeof username !== "string" ||
-		!isUsername(username)
+		!isUsername(username) ||
+		typeof displayName !== "string"
 	) {
 		throw new Error("アカウント一覧のユーザー形式が未対応です");
 	}
-	return { id, username, url: `https://x.com/${username}` };
+	return { id, username, displayName, url: `https://x.com/${username}` };
 }
 
 function readInstructions(instructions: unknown[]): {

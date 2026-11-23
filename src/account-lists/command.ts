@@ -39,6 +39,7 @@ function printAccountList(
 	console.table(
 		snapshot.accounts.map((account) => ({
 			ユーザー: `@${account.username}`,
+			表示名: account.displayName,
 			URL: account.url,
 		})),
 	);
